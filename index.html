@@ -2208,9 +2208,9 @@ async function mostrarQR() {
         if (error || !data) throw error || new Error("No se pudo crear la solicitud QR.");
 
         const token = String(data);
-        const loginUrl = new URL(window.location.href);
-        loginUrl.search = "";
-        loginUrl.hash = "";
+        // Usar siempre la dirección publicada, aunque el administrador abra
+        // una copia local del HTML en su PC.
+        const loginUrl = new URL("https://brunozebastian32-cmyk.github.io/nexatech-soporte/");
         loginUrl.searchParams.set("login_token", token);
 
         new QRCode(qrContainer, {
@@ -2356,15 +2356,27 @@ async function iniciarSesionConQR(token) {
     try {
         if (!supabaseClient) throw new Error("Supabase no está configurado.");
 
+        // Cargar las cuentas remotas antes de comprobar permisos en el móvil.
+        window.__nexa_loading_remote = true;
+        await cargarDesdeSupabase();
+        window.__nexa_loading_remote = false;
+
         const { data, error } = await supabaseClient.rpc("nexatech_get_login_request", {
             p_token: token
         });
 
         if (error) throw error;
 
-        const solicitud = Array.isArray(data) ? data[0] : data;
-        if (!solicitud || solicitud.status !== "pending") {
-            throw new Error("QR inválido, vencido o ya utilizado.");
+        let solicitud = Array.isArray(data) ? data[0] : data;
+        // Compatibilidad con una versión SQL anterior que declaró las columnas
+        // en orden status/role/email pero devolvía role/email/status.
+        if (solicitud && ["Administrador", "Profesor"].includes(String(solicitud.status))
+            && ["pending", "approved", "used", "expired"].includes(String(solicitud.email))) {
+            solicitud = { ...solicitud, status: solicitud.email, email: solicitud.role, role: solicitud.status };
+        }
+        if (!solicitud || String(solicitud.status || "").toLowerCase() !== "pending") {
+            const estado = solicitud && solicitud.status ? String(solicitud.status) : "sin respuesta";
+            throw new Error("La solicitud QR no está pendiente (estado: " + estado + "). Generá un QR nuevo desde la PC.");
         }
 
         const requestedEmail = String(solicitud.email || "").toLowerCase();
@@ -2411,7 +2423,9 @@ async function iniciarSesionConQR(token) {
 
     } catch (err) {
         console.error("QR login request:", err);
-        text.textContent = "QR inválido, vencido o ya utilizado. Volvé a generar un código nuevo desde la PC.";
+        text.textContent = (err && err.message)
+            ? "No se pudo validar el QR: " + err.message
+            : "No se pudo validar el QR. Volvé a generar un código nuevo desde la PC.";
         approveButton.style.display = "none";
     }
 
