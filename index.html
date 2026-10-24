@@ -2120,20 +2120,24 @@ async function mostrarQR() {
 
     panel.style.display = "block";
     qrContainer.innerHTML = "";
-    codigo.textContent = "Generando QR seguro…";
+    codigo.textContent = "Creando solicitud segura…";
 
     try {
         if (!supabaseClient) throw new Error("Supabase no está configurado.");
 
-        const { data, error } = await supabaseClient.rpc("nexatech_create_login_qr", {
+        // Crear una solicitud pendiente. La PC conserva este token y espera
+        // hasta que el teléfono que escanea el QR la autorice.
+        const { data, error } = await supabaseClient.rpc("nexatech_create_login_request", {
             p_role: tipoUsuario,
             p_email: email
         });
 
-        if (error || !data) throw error || new Error("No se pudo generar el QR.");
+        if (error || !data) throw error || new Error("No se pudo crear la solicitud QR.");
 
         const token = String(data);
-        const loginUrl = new URL(window.location.pathname, window.location.origin);
+        const loginUrl = new URL(window.location.href);
+        loginUrl.search = "";
+        loginUrl.hash = "";
         loginUrl.searchParams.set("login_token", token);
 
         new QRCode(qrContainer, {
@@ -2143,13 +2147,66 @@ async function mostrarQR() {
             correctLevel: QRCode.CorrectLevel.H
         });
 
-        codigo.textContent = "QR válido durante 5 minutos y de un solo uso.";
+        codigo.textContent = "Escaneá este QR con el celular para autorizar el acceso. Válido durante 5 minutos.";
         localStorage.setItem("nexatech_qr_actual", token);
+
+        // La PC pregunta periódicamente si el celular ya autorizó.
+        if (window.__nexa_qr_poll) clearInterval(window.__nexa_qr_poll);
+        window.__nexa_qr_poll = setInterval(() => revisarSolicitudQR(token), 1500);
+        revisarSolicitudQR(token);
 
     } catch (err) {
         console.error("QR login:", err);
         qrContainer.innerHTML = "";
         codigo.textContent = "No se pudo generar el QR. Verificá la conexión con Supabase.";
+    }
+
+}
+
+
+async function revisarSolicitudQR(token) {
+
+    try {
+        if (!supabaseClient) return;
+
+        const { data, error } = await supabaseClient.rpc("nexatech_check_login_request", {
+            p_token: token
+        });
+
+        if (error) throw error;
+
+        const solicitud = Array.isArray(data) ? data[0] : data;
+        if (!solicitud) return;
+
+        if (solicitud.status === "pending") return;
+
+        if (window.__nexa_qr_poll) {
+            clearInterval(window.__nexa_qr_poll);
+            window.__nexa_qr_poll = null;
+        }
+
+        if (solicitud.status === "approved") {
+            localStorage.setItem("nexatech_sesion", "true");
+            localStorage.setItem("nexatech_usuario", solicitud.email);
+            localStorage.setItem("nexatech_perfil", solicitud.role);
+            localStorage.removeItem("nexatech_qr_actual");
+
+            document.getElementById("qrCodigo").textContent = "Acceso autorizado. Iniciando sesión…";
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+            window.__nexa_loading_remote = true;
+            await cargarDesdeSupabase();
+            window.__nexa_loading_remote = false;
+            mostrarApp();
+            return;
+        }
+
+        if (solicitud.status === "expired" || solicitud.status === "used") {
+            document.getElementById("qrCodigo").textContent = "Este QR venció o ya fue utilizado. Generá uno nuevo.";
+        }
+
+    } catch (err) {
+        console.error("QR login polling:", err);
     }
 
 }
@@ -2166,48 +2223,109 @@ function ocultarQR() {
 
 async function iniciarSesionConQR(token) {
 
-    document.getElementById("loginPage").style.display = "flex";
+    const loginPage = document.getElementById("loginPage");
+    const loginBox = document.querySelector(".login-box");
+
+    loginPage.style.display = "flex";
     document.getElementById("app").style.display = "none";
-    const error = document.getElementById("loginError");
-    error.textContent = "Validando código QR…";
-    error.style.display = "block";
+
+    // Vista de autorización en el teléfono.
+    const oldQRAuth = document.getElementById("nexaQRAuth");
+    if (oldQRAuth) oldQRAuth.remove();
+
+    const auth = document.createElement("div");
+    auth.id = "nexaQRAuth";
+    auth.style.cssText = "text-align:center;padding:20px 0";
+    auth.innerHTML = `
+        <div style="font-size:42px;margin-bottom:12px">🔐</div>
+        <h2 style="margin-bottom:10px">Autorizar acceso</h2>
+        <p id="nexaQRAuthText" style="color:var(--text-muted);margin-bottom:20px">
+            Verificando solicitud…
+        </p>
+        <button id="nexaQRAuthorize" class="login-button" style="display:none">
+            Autorizar inicio de sesión
+        </button>
+        <button id="nexaQRBack" class="qr-button" style="margin-top:10px">
+            Cancelar
+        </button>
+    `;
+
+    const form = loginBox.querySelector("form");
+    const separator = loginBox.querySelector(".separator");
+    const qrButton = loginBox.querySelector(".qr-button");
+    const qrPanel = document.getElementById("qrPanel");
+    const warning = loginBox.querySelector(".login-warning");
+
+    form.style.display = "none";
+    separator.style.display = "none";
+    qrButton.style.display = "none";
+    qrPanel.style.display = "none";
+    warning.style.display = "none";
+    loginBox.appendChild(auth);
+
+    const text = document.getElementById("nexaQRAuthText");
+    const approveButton = document.getElementById("nexaQRAuthorize");
+    const backButton = document.getElementById("nexaQRBack");
+
+    backButton.onclick = () => {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        auth.remove();
+        form.style.display = "";
+        separator.style.display = "";
+        qrButton.style.display = "";
+        warning.style.display = "";
+    };
 
     try {
         if (!supabaseClient) throw new Error("Supabase no está configurado.");
 
-        const { data, error: rpcError } = await supabaseClient.rpc(
-            "nexatech_consume_login_qr",
-            { p_token: token }
-        );
+        const { data, error } = await supabaseClient.rpc("nexatech_get_login_request", {
+            p_token: token
+        });
 
-        if (rpcError) throw rpcError;
+        if (error) throw error;
 
-        const acceso = Array.isArray(data) ? data[0] : data;
-        if (!acceso || !acceso.email || !acceso.role) {
+        const solicitud = Array.isArray(data) ? data[0] : data;
+        if (!solicitud || solicitud.status !== "pending") {
             throw new Error("QR inválido, vencido o ya utilizado.");
         }
 
-        localStorage.setItem("nexatech_sesion", "true");
-        localStorage.setItem("nexatech_usuario", acceso.email);
-        localStorage.setItem("nexatech_perfil", acceso.role);
+        text.innerHTML = `Se solicitó iniciar sesión como <strong>${escapeHTML(solicitud.role)}</strong>.<br><br>Si sos vos, presioná el botón para autorizar la PC.`;
+        approveButton.style.display = "block";
 
-        error.style.display = "none";
+        approveButton.onclick = async () => {
+            approveButton.disabled = true;
+            approveButton.textContent = "Autorizando…";
 
-        window.history.replaceState({}, document.title, window.location.pathname);
+            try {
+                const { data: approved, error: approveError } = await supabaseClient.rpc(
+                    "nexatech_approve_login_request",
+                    { p_token: token }
+                );
 
-        window.__nexa_loading_remote = true;
-        await cargarDesdeSupabase();
-        window.__nexa_loading_remote = false;
-        mostrarApp();
+                if (approveError) throw approveError;
+
+                const result = Array.isArray(approved) ? approved[0] : approved;
+                if (!result || result.status !== "approved") {
+                    throw new Error("No se pudo autorizar el acceso.");
+                }
+
+                text.innerHTML = "<strong>Acceso autorizado.</strong><br><br>Ya podés volver a la PC.";
+                approveButton.style.display = "none";
+                backButton.textContent = "Cerrar";
+
+            } catch (err) {
+                console.error("QR approval:", err);
+                approveButton.disabled = false;
+                approveButton.textContent = "Autorizar inicio de sesión";
+                text.textContent = "No se pudo autorizar el acceso. Generá un QR nuevo e intentá nuevamente.";
+            }
+        };
 
     } catch (err) {
-        console.error("QR login consume:", err);
-        localStorage.removeItem("nexatech_sesion");
-        localStorage.removeItem("nexatech_usuario");
-        localStorage.removeItem("nexatech_perfil");
-        error.textContent = "QR inválido, vencido o ya utilizado. Generá un código nuevo.";
-        error.style.display = "block";
-        window.history.replaceState({}, document.title, window.location.pathname);
+        console.error("QR login request:", err);
+        text.textContent = "QR inválido, vencido o ya utilizado. Volvé a generar un código nuevo desde la PC.";
+        approveButton.style.display = "none";
     }
 
 }
