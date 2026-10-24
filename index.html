@@ -2096,41 +2096,61 @@ function cerrarSesion() {
    QR DE LOGIN
 ===================================================== */
 
-function mostrarQR() {
+async function mostrarQR() {
 
-    const panel =
-        document.getElementById("qrPanel");
+    const panel = document.getElementById("qrPanel");
+    const qrContainer = document.getElementById("qrCode");
+    const codigo = document.getElementById("qrCodigo");
+    const tipoUsuario = document.getElementById("tipoUsuario").value;
+    let email = document.getElementById("email").value.trim().toLowerCase();
 
-    const qrContainer =
-        document.getElementById("qrCode");
-
-    const codigo =
-        document.getElementById("qrCodigo");
+    if (tipoUsuario === "Administrador") {
+        email = "admin@nexatech.local";
+    } else {
+        const profesor = profesores.find(p =>
+            String(p.email || "").toLowerCase() === email
+        );
+        if (!profesor) {
+            const error = document.getElementById("loginError");
+            error.textContent = "Para generar un QR de profesor, primero ingresá un email de profesor válido.";
+            error.style.display = "block";
+            return;
+        }
+    }
 
     panel.style.display = "block";
-
-    const token =
-        generarToken("LOGIN");
-
-    localStorage.setItem(
-        "nexatech_qr_actual",
-        token
-    );
-
     qrContainer.innerHTML = "";
+    codigo.textContent = "Generando QR seguro…";
 
-    new QRCode(
-        qrContainer,
-        {
-            text: token,
-            width: 190,
-            height: 190,
+    try {
+        if (!supabaseClient) throw new Error("Supabase no está configurado.");
+
+        const { data, error } = await supabaseClient.rpc("nexatech_create_login_qr", {
+            p_role: tipoUsuario,
+            p_email: email
+        });
+
+        if (error || !data) throw error || new Error("No se pudo generar el QR.");
+
+        const token = String(data);
+        const loginUrl = new URL(window.location.pathname, window.location.origin);
+        loginUrl.searchParams.set("login_token", token);
+
+        new QRCode(qrContainer, {
+            text: loginUrl.toString(),
+            width: 220,
+            height: 220,
             correctLevel: QRCode.CorrectLevel.H
-        }
-    );
+        });
 
-    codigo.textContent =
-        "Código: " + token;
+        codigo.textContent = "QR válido durante 5 minutos y de un solo uso.";
+        localStorage.setItem("nexatech_qr_actual", token);
+
+    } catch (err) {
+        console.error("QR login:", err);
+        qrContainer.innerHTML = "";
+        codigo.textContent = "No se pudo generar el QR. Verificá la conexión con Supabase.";
+    }
 
 }
 
@@ -2140,6 +2160,55 @@ function ocultarQR() {
     document
     .getElementById("qrPanel")
     .style.display = "none";
+
+}
+
+
+async function iniciarSesionConQR(token) {
+
+    document.getElementById("loginPage").style.display = "flex";
+    document.getElementById("app").style.display = "none";
+    const error = document.getElementById("loginError");
+    error.textContent = "Validando código QR…";
+    error.style.display = "block";
+
+    try {
+        if (!supabaseClient) throw new Error("Supabase no está configurado.");
+
+        const { data, error: rpcError } = await supabaseClient.rpc(
+            "nexatech_consume_login_qr",
+            { p_token: token }
+        );
+
+        if (rpcError) throw rpcError;
+
+        const acceso = Array.isArray(data) ? data[0] : data;
+        if (!acceso || !acceso.email || !acceso.role) {
+            throw new Error("QR inválido, vencido o ya utilizado.");
+        }
+
+        localStorage.setItem("nexatech_sesion", "true");
+        localStorage.setItem("nexatech_usuario", acceso.email);
+        localStorage.setItem("nexatech_perfil", acceso.role);
+
+        error.style.display = "none";
+
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        window.__nexa_loading_remote = true;
+        await cargarDesdeSupabase();
+        window.__nexa_loading_remote = false;
+        mostrarApp();
+
+    } catch (err) {
+        console.error("QR login consume:", err);
+        localStorage.removeItem("nexatech_sesion");
+        localStorage.removeItem("nexatech_usuario");
+        localStorage.removeItem("nexatech_perfil");
+        error.textContent = "QR inválido, vencido o ya utilizado. Generá un código nuevo.";
+        error.style.display = "block";
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
 
 }
 
@@ -4501,10 +4570,17 @@ function escapeHTML(text) {
 
     const urlParams = new URLSearchParams(window.location.search);
     const pcToken = urlParams.get("pc_token");
+    const loginToken = urlParams.get("login_token");
 
     // Un QR de PC abre directamente la ficha pública, sin login.
     if (pcToken) {
         await abrirQRPublico(pcToken);
+        return;
+    }
+
+    // Un QR de inicio de sesión consume un token de un solo uso.
+    if (loginToken) {
+        await iniciarSesionConQR(loginToken);
         return;
     }
 
