@@ -871,7 +871,7 @@ input, select {
                 <input
                     type="email"
                     id="email"
-                    placeholder="Ingrese su email"
+                    placeholder="admin@ejemplo.com o profesor@utu.edu.uy"
                     required
                 >
 
@@ -956,7 +956,8 @@ input, select {
         </div>
 
         <div class="login-warning">
-            Prueba con: <strong>admin@nexatech.local</strong> / <strong>NexaAdmin2026</strong> (Admin) o <strong>profesor@utu.edu.uy</strong> / <strong>1234</strong> (Profesor).
+            Profesores: usar una cuenta registrada con correo institucional <strong>@utu.edu.uy</strong>.<br>
+            Administradores: solo pueden ingresar las cuentas registradas por un administrador.
         </div>
 
     </div>
@@ -1030,6 +1031,12 @@ input, select {
                 class="admin-only"
                 onclick="mostrarSeccion('profesores', this)">
                 Profesores
+            </button>
+
+            <button
+                class="admin-only"
+                onclick="mostrarSeccion('administradores', this)">
+                Administradores
             </button>
 
             <button
@@ -1609,6 +1616,37 @@ input, select {
 
 
         <!-- =================================================
+             ADMINISTRADORES (ADMIN ONLY)
+        ================================================== -->
+
+        <section id="administradores" class="section admin-only">
+            <div class="panel">
+                <h2>Agregar administrador</h2>
+                <p>Registrá acá las cuentas que podrán iniciar sesión como administrador.</p>
+                <form class="form" onsubmit="agregarAdministrador(event)">
+                    <div class="field">
+                        <label for="nombreAdministrador">Nombre</label>
+                        <input type="text" id="nombreAdministrador" placeholder="Nombre completo" required>
+                    </div>
+                    <div class="field">
+                        <label for="emailAdministrador">Email</label>
+                        <input type="email" id="emailAdministrador" placeholder="admin@ejemplo.com" required>
+                    </div>
+                    <div class="field">
+                        <label for="passwordAdministrador">Contraseña</label>
+                        <input type="password" id="passwordAdministrador" minlength="8" placeholder="Mínimo 8 caracteres" required>
+                    </div>
+                    <button class="button" type="submit">Agregar administrador</button>
+                </form>
+            </div>
+            <div class="panel">
+                <h2>Administradores registrados</h2>
+                <div id="listaAdministradores" class="list"></div>
+            </div>
+        </section>
+
+
+        <!-- =================================================
              TECNICOS (ADMIN ONLY)
         ================================================== -->
 
@@ -1884,12 +1922,36 @@ let profesores = JSON.parse(localStorage.getItem("nexatech_profesores")) || [
     { id: 1, nombre: "Profesor Prueba", email: "profesor@utu.edu.uy", password: "1234" }
 ];
 
+// Cuentas de demostración. Asegura que existan incluso si el navegador ya tenía
+// una lista vacía guardada de una versión anterior.
+let administradores = JSON.parse(localStorage.getItem("nexatech_administradores")) || [];
+if (!Array.isArray(administradores)) administradores = [];
+if (!administradores.some(a => String(a.email || "").trim().toLowerCase() === "admin@nexatech.local")) {
+    administradores.unshift({
+        id: Date.now(),
+        nombre: "Administrador principal",
+        email: "admin@nexatech.local",
+        password: "NexaAdmin2026"
+    });
+}
+
+if (!Array.isArray(profesores)) profesores = [];
+if (!profesores.some(p => String(p.email || "").trim().toLowerCase() === "profesor@utu.edu.uy")) {
+    profesores.push({
+        id: Date.now() + 1,
+        nombre: "Profesor de prueba",
+        email: "profesor@utu.edu.uy",
+        password: "1234"
+    });
+}
+
 localStorage.setItem("nexatech_salones", JSON.stringify(salones));
 localStorage.setItem("nexatech_pcs", JSON.stringify(pcs));
 localStorage.setItem("nexatech_switches", JSON.stringify(switches));
 localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
 localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
 localStorage.setItem("nexatech_profesores", JSON.stringify(profesores));
+localStorage.setItem("nexatech_administradores", JSON.stringify(administradores));
 
 
 /* =====================================================
@@ -1921,87 +1983,50 @@ document
 
     event.preventDefault();
 
-    const tipoUsuario =
-        document
-        .getElementById("tipoUsuario")
-        .value;
-
-    const email =
-        document
-        .getElementById("email")
-        .value
-        .trim()
-        .toLowerCase();
-
-    const password =
-        document
-        .getElementById("password")
-        .value;
-
-    const error =
-        document
-        .getElementById("loginError");
-
+    const tipoUsuario = document.getElementById("tipoUsuario").value;
+    const email = document.getElementById("email").value.trim().toLowerCase();
+    const password = document.getElementById("password").value;
+    const error = document.getElementById("loginError");
     let acceso = false;
     let nombreUsuario = email;
 
-    if (
-        tipoUsuario === "Administrador" &&
-        email === "admin@nexatech.local" &&
-        password === "NexaAdmin2026"
-    ) {
-        acceso = true;
-    }
-
-    if (tipoUsuario === "Profesor") {
-
-        const profesor =
-            profesores.find(function(p) {
-
-                return (
-                    p.email.toLowerCase() === email &&
-                    p.password === password
-                );
-
-            });
-
+    if (tipoUsuario === "Administrador") {
+        const admin = administradores.find(a =>
+            String(a.email || "").toLowerCase() === email && a.password === password
+        );
+        if (admin) {
+            acceso = true;
+            nombreUsuario = admin.nombre || admin.email;
+        }
+    } else if (tipoUsuario === "Profesor") {
+        if (!email.endsWith("@utu.edu.uy")) {
+            error.textContent = "El profesor debe ingresar su correo institucional @utu.edu.uy.";
+            error.style.display = "block";
+            return;
+        }
+        const profesor = profesores.find(p =>
+            String(p.email || "").toLowerCase() === email && p.password === password
+        );
         if (profesor) {
             acceso = true;
-            nombreUsuario = profesor.nombre;
+            nombreUsuario = profesor.nombre || profesor.email;
         }
     }
 
     if (acceso) {
-
-        localStorage.setItem(
-            "nexatech_sesion",
-            "true"
-        );
-
-        localStorage.setItem(
-            "nexatech_usuario",
-            nombreUsuario
-        );
-
-        localStorage.setItem(
-            "nexatech_perfil",
-            tipoUsuario
-        );
-
+        localStorage.setItem("nexatech_sesion", "true");
+        localStorage.setItem("nexatech_usuario", nombreUsuario);
+        localStorage.setItem("nexatech_email", email);
+        localStorage.setItem("nexatech_perfil", tipoUsuario);
         error.style.display = "none";
-
         mostrarApp();
-
         return;
     }
 
-    error.textContent =
-        tipoUsuario === "Profesor"
-        ? "Email o contraseña de profesor incorrectos."
-        : "Email o contraseña de administrador incorrectos.";
-
+    error.textContent = tipoUsuario === "Profesor"
+        ? "Profesor no registrado o contraseña incorrecta. Pedile al administrador que registre tu cuenta."
+        : "Administrador no registrado o contraseña incorrecta. Solo pueden entrar las cuentas que agregaste.";
     error.style.display = "block";
-
 });
 
 
@@ -2044,6 +2069,7 @@ function mostrarApp() {
     }
 
     actualizar();
+    mostrarAdministradores();
 
     const urlParams = new URLSearchParams(window.location.search);
     const pcToken = urlParams.get('pc_token');
@@ -2074,6 +2100,7 @@ function cerrarSesion() {
     localStorage.removeItem(
         "nexatech_perfil"
     );
+    localStorage.removeItem("nexatech_email");
 
     document.body.classList.remove("rol-profesor");
 
@@ -2104,15 +2131,23 @@ async function mostrarQR() {
     const tipoUsuario = document.getElementById("tipoUsuario").value;
     let email = document.getElementById("email").value.trim().toLowerCase();
 
+    const error = document.getElementById("loginError");
     if (tipoUsuario === "Administrador") {
-        email = "admin@nexatech.local";
+        const admin = administradores.find(a => String(a.email || "").toLowerCase() === email);
+        if (!admin) {
+            error.textContent = "Ese administrador no está registrado. Solo se pueden usar cuentas que agregaste.";
+            error.style.display = "block";
+            return;
+        }
     } else {
-        const profesor = profesores.find(p =>
-            String(p.email || "").toLowerCase() === email
-        );
+        if (!email.endsWith("@utu.edu.uy")) {
+            error.textContent = "Para profesores, ingresá un correo institucional @utu.edu.uy.";
+            error.style.display = "block";
+            return;
+        }
+        const profesor = profesores.find(p => String(p.email || "").toLowerCase() === email);
         if (!profesor) {
-            const error = document.getElementById("loginError");
-            error.textContent = "Para generar un QR de profesor, primero ingresá un email de profesor válido.";
+            error.textContent = "Ese profesor no está registrado. Pedile al administrador que agregue la cuenta.";
             error.style.display = "block";
             return;
         }
@@ -2158,7 +2193,10 @@ async function mostrarQR() {
     } catch (err) {
         console.error("QR login:", err);
         qrContainer.innerHTML = "";
-        codigo.textContent = "No se pudo generar el QR. Verificá la conexión con Supabase.";
+        const detalle = err && (err.message || err.details || err.hint)
+            ? (err.message || err.details || err.hint)
+            : String(err || "Error desconocido");
+        codigo.textContent = "Error al generar QR: " + detalle;
     }
 
 }
@@ -2290,7 +2328,14 @@ async function iniciarSesionConQR(token) {
             throw new Error("QR inválido, vencido o ya utilizado.");
         }
 
-        text.innerHTML = `Se solicitó iniciar sesión como <strong>${escapeHTML(solicitud.role)}</strong>.<br><br>Si sos vos, presioná el botón para autorizar la PC.`;
+        const requestedEmail = String(solicitud.email || "").toLowerCase();
+        const roleIsValid = solicitud.role === "Administrador"
+            ? administradores.some(a => String(a.email || "").toLowerCase() === requestedEmail)
+            : solicitud.role === "Profesor"
+                && requestedEmail.endsWith("@utu.edu.uy")
+                && profesores.some(p => String(p.email || "").toLowerCase() === requestedEmail);
+        if (!roleIsValid) throw new Error("La cuenta no está registrada o no tiene permiso para este tipo de acceso.");
+        text.innerHTML = `Se solicitó iniciar sesión como <strong>${escapeHTML(solicitud.role)}</strong> para <strong>${escapeHTML(requestedEmail)}</strong>.<br><br>Si reconocés esta cuenta, presioná el botón para autorizar la PC.`;
         approveButton.style.display = "block";
 
         approveButton.onclick = async () => {
@@ -2306,8 +2351,9 @@ async function iniciarSesionConQR(token) {
                 if (approveError) throw approveError;
 
                 const result = Array.isArray(approved) ? approved[0] : approved;
+                // La RPC devuelve una fila con status/role/email (no success=true).
                 if (!result || result.status !== "approved") {
-                    throw new Error("No se pudo autorizar el acceso.");
+                    throw new Error("La solicitud ya venció, fue usada o no existe. Generá otro QR.");
                 }
 
                 text.innerHTML = "<strong>Acceso autorizado.</strong><br><br>Ya podés volver a la PC.";
@@ -2318,7 +2364,7 @@ async function iniciarSesionConQR(token) {
                 console.error("QR approval:", err);
                 approveButton.disabled = false;
                 approveButton.textContent = "Autorizar inicio de sesión";
-                text.textContent = "No se pudo autorizar el acceso. Generá un QR nuevo e intentá nuevamente.";
+                text.textContent = "No se pudo autorizar: " + (err && err.message ? err.message : "error desconocido");
             }
         };
 
@@ -2374,6 +2420,8 @@ function mostrarSeccion(id, boton) {
         reparaciones: "Reparaciones",
 
         profesores: "Profesores",
+
+        administradores: "Administradores",
 
         tecnicos: "Técnicos",
 
@@ -2645,6 +2693,11 @@ function guardar() {
     localStorage.setItem(
         "nexatech_profesores",
         JSON.stringify(profesores)
+    );
+
+    localStorage.setItem(
+        "nexatech_administradores",
+        JSON.stringify(administradores)
     );
 
     // Sincronización remota no bloqueante.
@@ -3843,6 +3896,67 @@ function mostrarReparaciones() {
 
 
 /* =====================================================
+   ADMINISTRADORES
+===================================================== */
+
+function agregarAdministrador(event) {
+    event.preventDefault();
+    const nombre = document.getElementById("nombreAdministrador").value.trim();
+    const email = document.getElementById("emailAdministrador").value.trim().toLowerCase();
+    const password = document.getElementById("passwordAdministrador").value;
+
+    if (!nombre || !email || password.length < 8) {
+        alert("Completá todos los campos. La contraseña debe tener al menos 8 caracteres.");
+        return;
+    }
+    if (administradores.some(a => String(a.email || "").toLowerCase() === email)) {
+        alert("Ya existe un administrador con ese email.");
+        return;
+    }
+
+    administradores.push({ id: Date.now(), nombre, email, password });
+    guardar();
+    document.getElementById("nombreAdministrador").value = "";
+    document.getElementById("emailAdministrador").value = "";
+    document.getElementById("passwordAdministrador").value = "";
+    mostrarAdministradores();
+    alert("Administrador agregado correctamente.");
+}
+
+function eliminarAdministrador(id) {
+    if (administradores.length <= 1) {
+        alert("No podés eliminar el último administrador.");
+        return;
+    }
+    const actual = String(localStorage.getItem("nexatech_email") || "").toLowerCase();
+    const objetivo = administradores.find(a => a.id === id);
+    if (objetivo && String(objetivo.email || "").toLowerCase() === actual) {
+        alert("No podés eliminar la cuenta con la que estás conectado.");
+        return;
+    }
+    if (!confirm("¿Seguro que querés eliminar este administrador?")) return;
+    administradores = administradores.filter(a => a.id !== id);
+    guardar();
+    mostrarAdministradores();
+}
+
+function mostrarAdministradores() {
+    const contenedor = document.getElementById("listaAdministradores");
+    if (!contenedor) return;
+    if (!administradores.length) {
+        contenedor.innerHTML = "<p>No hay administradores registrados.</p>";
+        return;
+    }
+    contenedor.innerHTML = administradores.map(a => `
+        <div class="list-item">
+            <div><strong>${escapeHTML(a.nombre || "Administrador")}</strong><br><span>${escapeHTML(a.email)}</span></div>
+            <button class="button button-danger" onclick="eliminarAdministrador(${Number(a.id)})">Eliminar</button>
+        </div>
+    `).join("");
+}
+
+
+/* =====================================================
    PROFESORES
 ===================================================== */
 
@@ -3861,6 +3975,11 @@ function agregarProfesor(event) {
 
     if (!nombre || !email || !password) {
         alert("Complete todos los campos.");
+        return;
+    }
+
+    if (!email.endsWith("@utu.edu.uy")) {
+        alert("El correo del profesor debe terminar en @utu.edu.uy.");
         return;
     }
 
@@ -4702,14 +4821,17 @@ function escapeHTML(text) {
         return;
     }
 
-    // Para el panel normal, cargar datos compartidos primero.
+    // La página siempre pide iniciar sesión manualmente. No reutilizar una sesión anterior.
+    localStorage.removeItem("nexatech_sesion");
+    localStorage.removeItem("nexatech_usuario");
+    localStorage.removeItem("nexatech_perfil");
+    localStorage.removeItem("nexatech_email");
+
     window.__nexa_loading_remote = true;
     await cargarDesdeSupabase();
     window.__nexa_loading_remote = false;
-
-    if (localStorage.getItem("nexatech_sesion") === "true") {
-        mostrarApp();
-    }
+    document.getElementById("app").style.display = "none";
+    document.getElementById("loginPage").style.display = "flex";
 
 })();
 
