@@ -77,6 +77,9 @@ body {
 body.rol-profesor .admin-only {
     display: none !important;
 }
+body.rol-profesor .teacher-only {
+    display: block !important;
+}
 
 /* LOGIN */
 
@@ -857,7 +860,7 @@ input, select {
                     id="tipoUsuario"
                     required>
 
-                    <option value="Administrador">Administrador / Técnico</option>
+                    <option value="Administrador">Administrador</option>
                     <option value="Profesor">Profesor</option>
 
                 </select>
@@ -1464,7 +1467,9 @@ input, select {
 
             <div class="panel">
 
-                <h2>Registrar reparación</h2>
+                <h2>Registrar problema / reparación</h2>
+                <p class="admin-only" style="margin:8px 0 14px;color:var(--text-muted)">Los administradores pueden registrar reparaciones y actualizar su estado.</p>
+                <p class="teacher-only" style="display:none;margin:8px 0 14px;color:var(--text-muted)">Como profesor podés reportar un problema. Se registrará como pendiente y podrás consultar el estado de tus propios reportes.</p>
 
                 <form
                     class="form"
@@ -1498,7 +1503,7 @@ input, select {
 
                     </div>
 
-                    <div class="field">
+                    <div class="field admin-only">
 
                         <label>Estado</label>
 
@@ -1974,6 +1979,31 @@ function generarToken(tipo) {
 
 
 /* =====================================================
+   PERMISOS DE INTERFAZ
+   Nota: estos controles de cliente mejoran la interfaz, pero la
+   autorización real debe reforzarse en Supabase/RLS.
+===================================================== */
+function perfilActualNexa() {
+    return localStorage.getItem("nexatech_perfil") || "";
+}
+
+function esAdministradorNexa() {
+    return localStorage.getItem("nexatech_sesion") === "true" && perfilActualNexa() === "Administrador";
+}
+
+function esProfesorNexa() {
+    return localStorage.getItem("nexatech_sesion") === "true" && perfilActualNexa() === "Profesor";
+}
+
+function exigirAdministradorNexa() {
+    if (!esAdministradorNexa()) {
+        alert("Acceso restringido: solo el administrador puede realizar esta acción.");
+        return false;
+    }
+    return true;
+}
+
+/* =====================================================
    LOGIN
 ===================================================== */
 
@@ -2035,6 +2065,14 @@ document
 ===================================================== */
 
 function mostrarApp() {
+
+    const perfilValidado = perfilActualNexa();
+    if (localStorage.getItem("nexatech_sesion") !== "true" || !["Administrador", "Profesor"].includes(perfilValidado)) {
+        localStorage.removeItem("nexatech_sesion");
+        document.getElementById("app").style.display = "none";
+        document.getElementById("loginPage").style.display = "flex";
+        return;
+    }
 
     document
     .getElementById("loginPage")
@@ -2226,6 +2264,7 @@ async function revisarSolicitudQR(token) {
         if (solicitud.status === "approved") {
             localStorage.setItem("nexatech_sesion", "true");
             localStorage.setItem("nexatech_usuario", solicitud.email);
+            localStorage.setItem("nexatech_email", String(solicitud.email || "").toLowerCase());
             localStorage.setItem("nexatech_perfil", solicitud.role);
             localStorage.removeItem("nexatech_qr_actual");
 
@@ -2351,9 +2390,11 @@ async function iniciarSesionConQR(token) {
                 if (approveError) throw approveError;
 
                 const result = Array.isArray(approved) ? approved[0] : approved;
-                // La RPC devuelve una fila con status/role/email (no success=true).
-                if (!result || result.status !== "approved") {
-                    throw new Error("La solicitud ya venció, fue usada o no existe. Generá otro QR.");
+                // La función SQL compartida devuelve success/message.
+                // También toleramos versiones antiguas que devolvían status.
+                const autorizada = !!result && (result.success === true || result.status === "approved");
+                if (!autorizada) {
+                    throw new Error((result && result.message) || "La solicitud ya venció, fue usada o no existe. Generá otro QR.");
                 }
 
                 text.innerHTML = "<strong>Acceso autorizado.</strong><br><br>Ya podés volver a la PC.";
@@ -2382,6 +2423,9 @@ async function iniciarSesionConQR(token) {
 ===================================================== */
 
 function mostrarSeccion(id, boton) {
+
+    const seccionesSoloAdmin = ["switches", "profesores", "administradores", "tecnicos"];
+    if (seccionesSoloAdmin.includes(id) && !exigirAdministradorNexa()) return;
 
     document
     .querySelectorAll(".section")
@@ -2714,6 +2758,8 @@ function guardar() {
 
 function agregarSalon(event) {
 
+    if (!exigirAdministradorNexa()) return;
+
     event.preventDefault();
 
     const input =
@@ -2749,6 +2795,8 @@ function agregarSalon(event) {
 
 function eliminarSalon(id) {
 
+    if (!exigirAdministradorNexa()) return;
+
     if (!confirm("¿Eliminar este salón?")) {
         return;
     }
@@ -2771,6 +2819,8 @@ function eliminarSalon(id) {
 ===================================================== */
 
 function agregarGrupo(event) {
+
+    if (!exigirAdministradorNexa()) return;
 
     event.preventDefault();
 
@@ -2853,6 +2903,8 @@ function agregarGrupo(event) {
 
 function eliminarGrupo(salonId, grupoId) {
 
+    if (!exigirAdministradorNexa()) return;
+
     const salon =
         salones.find(
             salon =>
@@ -2881,6 +2933,8 @@ function eliminarGrupo(salonId, grupoId) {
 ===================================================== */
 
 function agregarPC(event) {
+
+    if (!exigirAdministradorNexa()) return;
 
     event.preventDefault();
 
@@ -2937,6 +2991,8 @@ function agregarPC(event) {
 
 
 function eliminarPC(id) {
+
+    if (!exigirAdministradorNexa()) return;
 
     if (!confirm("¿Eliminar esta computadora?")) {
         return;
@@ -3235,6 +3291,8 @@ function imprimirQRPC() {
 
 function agregarSwitch(event) {
 
+    if (!exigirAdministradorNexa()) return;
+
     event.preventDefault();
 
     const nombre =
@@ -3288,6 +3346,8 @@ function agregarSwitch(event) {
 
 function eliminarSwitch(id) {
 
+    if (!exigirAdministradorNexa()) return;
+
     if (!confirm("¿Eliminar este switch?")) {
         return;
     }
@@ -3312,6 +3372,10 @@ function eliminarSwitch(id) {
 function agregarReparacion(event) {
 
     event.preventDefault();
+    if (!esAdministradorNexa() && !esProfesorNexa()) {
+        alert("Iniciá sesión para registrar un reporte.");
+        return;
+    }
 
     const pc =
         document
@@ -3324,10 +3388,10 @@ function agregarReparacion(event) {
         .value
         .trim();
 
-    const estado =
-        document
-        .getElementById("estadoReparacion")
-        .value;
+    const estado = esAdministradorNexa()
+        ? document.getElementById("estadoReparacion").value
+        : "Pendiente";
+    const reportadoPor = String(localStorage.getItem("nexatech_email") || "").trim().toLowerCase();
 
     if (!pc || !problema) {
         return;
@@ -3342,6 +3406,8 @@ function agregarReparacion(event) {
         problema: problema,
 
         estado: estado,
+
+        reportadoPor: reportadoPor,
 
         fecha:
             new Date()
@@ -3361,6 +3427,8 @@ function agregarReparacion(event) {
 
 
 function eliminarReparacion(id) {
+
+    if (!exigirAdministradorNexa()) return;
 
     if (!confirm("¿Eliminar esta reparación?")) {
         return;
@@ -3384,6 +3452,8 @@ function eliminarReparacion(id) {
 ===================================================== */
 
 function agregarTecnico(event) {
+
+    if (!exigirAdministradorNexa()) return;
 
     event.preventDefault();
 
@@ -3429,6 +3499,8 @@ function agregarTecnico(event) {
 
 
 function eliminarTecnico(id) {
+
+    if (!exigirAdministradorNexa()) return;
 
     if (!confirm("¿Eliminar este técnico?")) {
         return;
@@ -3826,11 +3898,15 @@ function mostrarReparaciones() {
             "listaReparaciones"
         );
 
-    if (reparaciones.length === 0) {
+    const reparacionesVisibles = esAdministradorNexa()
+        ? reparaciones
+        : reparaciones.filter(r => String(r.reportadoPor || "").toLowerCase() === String(localStorage.getItem("nexatech_email") || "").toLowerCase());
+
+    if (reparacionesVisibles.length === 0) {
 
         contenedor.innerHTML =
             `<div class="empty">
-                No hay reparaciones registradas.
+                ${esProfesorNexa() ? "Todavía no reportaste problemas." : "No hay reparaciones registradas."}
             </div>`;
 
         return;
@@ -3838,7 +3914,7 @@ function mostrarReparaciones() {
 
     contenedor.innerHTML = "";
 
-    reparaciones.forEach(reparacion => {
+    reparacionesVisibles.forEach(reparacion => {
 
         const pc =
             pcs.find(
@@ -3873,6 +3949,7 @@ function mostrarReparaciones() {
 
                         Fecha:
                         ${escapeHTML(reparacion.fecha)}
+                        ${esAdministradorNexa() && reparacion.reportadoPor ? `<br>Reportado por: ${escapeHTML(reparacion.reportadoPor)}` : ""}
 
                     </div>
 
@@ -3900,6 +3977,8 @@ function mostrarReparaciones() {
 ===================================================== */
 
 function agregarAdministrador(event) {
+
+    if (!exigirAdministradorNexa()) return;
     event.preventDefault();
     const nombre = document.getElementById("nombreAdministrador").value.trim();
     const email = document.getElementById("emailAdministrador").value.trim().toLowerCase();
@@ -3924,6 +4003,8 @@ function agregarAdministrador(event) {
 }
 
 function eliminarAdministrador(id) {
+
+    if (!exigirAdministradorNexa()) return;
     if (administradores.length <= 1) {
         alert("No podés eliminar el último administrador.");
         return;
@@ -3961,6 +4042,8 @@ function mostrarAdministradores() {
 ===================================================== */
 
 function agregarProfesor(event) {
+
+    if (!exigirAdministradorNexa()) return;
 
     event.preventDefault();
 
@@ -4010,6 +4093,8 @@ function agregarProfesor(event) {
 }
 
 function eliminarProfesor(id) {
+
+    if (!exigirAdministradorNexa()) return;
 
     if (!confirm("¿Está seguro de eliminar este profesor?")) {
         return;
