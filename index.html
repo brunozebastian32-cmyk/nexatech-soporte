@@ -1392,7 +1392,7 @@ main.content {
 
         <div id="loginError" class="login-error"></div>
 
-        <form id="loginForm">
+        <form id="loginForm" autocomplete="off">
 
             <div class="login-field">
 
@@ -1411,17 +1411,20 @@ main.content {
 
             <div class="login-field">
 
-                <label for="email">Email</label>
+                <label for="email">Correo institucional / C.I.</label>
 
                 <div class="input-wrap">
                     <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>
                     <input
-                        type="email"
+                        type="text"
                         id="email"
-                        placeholder="admin@ejemplo.com o profesor@utu.edu.uy"
-                        autocomplete="username"
+                        placeholder="usuario@utu.edu.uy"
+                        autocomplete="off"
                         required
                     >
+                </div>
+                <div id="loginCredentialHint" style="color:var(--text-muted);font-size:12px;margin-top:6px">
+                    Administradores: solo @utu.edu.uy · Profesores: @utu.edu.uy o C.I.
                 </div>
 
             </div>
@@ -1436,7 +1439,7 @@ main.content {
                         type="password"
                         id="password"
                         placeholder="Ingrese su contraseña"
-                        autocomplete="current-password"
+                        autocomplete="new-password"
                         required
                     >
                     <button type="button" class="pass-toggle" aria-label="Mostrar u ocultar contraseña"
@@ -1987,15 +1990,16 @@ main.content {
             </div>
 
             <div class="panel">
-                <h2>Mapa 3D de computadoras</h2>
+                <h2>Mapa 2D de computadoras</h2>
                 <p style="color:var(--text-muted);line-height:1.5;margin-bottom:12px">
-                    Arrastrá cada PC para colocarla en la posición real del salón. La posición queda guardada y se comparte con Supabase.
+                    Organizá las PCs sobre el plano del salón. El mapa usa un piso de madera y cada PC se puede mover libremente. Los cambios se guardan y se comparten entre dispositivos.
                 </p>
                 <div class="nexa-map-toolbar">
-                    <select id="mapSalonSelect" onchange="renderMapa3DNexa()"></select>
-                    <button class="button button-secondary" onclick="centrarMapaNexa()">Recentrar</button>
+                    <select id="mapSalonSelect" onchange="renderMapa2DNexa()"></select>
+                    <button class="button" onclick="agregarPCDesdeMapaNexa()">+ Agregar PC</button>
+                    <button class="button button-secondary" onclick="centrarMapaNexa()">Reordenar PCs</button>
                 </div>
-                <div id="mapa3D" class="nexa-map-wrap">
+                <div id="mapa3D" class="nexa-map-wrap nexa-map-2d">
                     <div class="nexa-map-stage">
                         <div class="nexa-map-floor"></div>
                         <div class="nexa-map-wall w1"></div>
@@ -2003,7 +2007,7 @@ main.content {
                         <div id="mapaPCs"></div>
                     </div>
                 </div>
-                <div class="nexa-map-help">Modo edición: solo administrador. Arrastrá las PCs; la posición se guarda automáticamente.</div>
+                <div class="nexa-map-help">Solo el administrador puede mover o agregar PCs. Arrastrá una PC para ubicarla en el salón.</div>
             </div>
 
         </section>
@@ -2017,16 +2021,12 @@ main.content {
             <div class="panel">
                 <h2>Control de asistencia y uso</h2>
                 <p style="color:var(--text-muted);line-height:1.5;margin-bottom:18px">
-                    Registrá la entrada y salida del usuario que inició sesión. Cada movimiento guarda fecha, hora, perfil, email y PC utilizada.
+                    Registrá la entrada y salida del usuario que inició sesión. Cada movimiento guarda fecha, hora, perfil y email.
                 </p>
                 <div class="nexa-checkin-wrap">
                     <div class="nexa-check-card">
                         <h3>Mi jornada</h3>
                         <div id="checkinEstado" class="nexa-check-status">Cargando estado…</div>
-                        <div class="field">
-                            <label for="checkinPC">PC utilizada (obligatoria)</label>
-                            <select id="checkinPC"><option value="">Seleccionar PC</option></select>
-                        </div>
                         <div class="nexa-check-actions">
                             <button class="button button-success" onclick="registrarCheckin()">Registrar check-in</button>
                             <button class="button button-danger" onclick="registrarCheckout()">Registrar check-out</button>
@@ -2271,12 +2271,23 @@ main.content {
                     </div>
 
                     <div class="field">
+                        <label>Cédula de identidad</label>
+                        <input
+                            type="text"
+                            id="ciProfesor"
+                            inputmode="numeric"
+                            placeholder="Ej: 12345678"
+                            required>
+                    </div>
+
+                    <div class="field">
 
                         <label>Contraseña</label>
 
                         <input
                             type="password"
                             id="passwordProfesor"
+                            autocomplete="new-password"
                             placeholder="Contraseña para iniciar sesión"
                             minlength="4"
                             required>
@@ -2324,7 +2335,7 @@ main.content {
                     </div>
                     <div class="field">
                         <label for="passwordAdministrador">Contraseña</label>
-                        <input type="password" id="passwordAdministrador" minlength="8" placeholder="Mínimo 8 caracteres" required>
+                        <input type="password" id="passwordAdministrador" minlength="8" autocomplete="new-password" placeholder="Mínimo 8 caracteres" required>
                     </div>
                     <button class="button" type="submit">Agregar administrador</button>
                 </form>
@@ -2619,34 +2630,31 @@ let tecnicos = JSON.parse(localStorage.getItem("nexatech_tecnicos")) || [
 ];
 
 let profesores = JSON.parse(localStorage.getItem("nexatech_profesores")) || [
-    { id: 1, nombre: "Profesor Prueba", email: "profesor@utu.edu.uy", password: "1234" }
+    { id: 1, nombre: "Profesor Prueba", email: "profesor@utu.edu.uy", password: "1234", ci: "12345670" }
 ];
 
 // Cuentas de demostración. Asegura que existan incluso si el navegador ya tenía
 // una lista vacía guardada de una versión anterior.
 let administradores = JSON.parse(localStorage.getItem("nexatech_administradores")) || [];
 if (!Array.isArray(administradores)) administradores = [];
-if (!administradores.some(a => String(a.email || "").trim().toLowerCase() === "admin@nexatech.local")) {
+if (!administradores.some(a => String(a.email || "").trim().toLowerCase() === "admin@utu.edu.uy")) {
     administradores.unshift({
         id: Date.now(),
         nombre: "Administrador principal",
-        email: "admin@nexatech.local",
+        email: "admin@utu.edu.uy",
         password: "NexaAdmin2026"
     });
 }
 
 // (se quita la versión anterior con email "admin" si quedó guardada en el navegador)
 administradores = administradores.filter(a => String(a.email || "").trim().toLowerCase() !== "admin");
-if (!administradores.some(a => String(a.email || "").trim().toLowerCase() === "admin@gmail.com")) {
-    administradores.push({
-        id: Date.now() + 2,
-        nombre: "Fabricio",
-        email: "admin@gmail.com",
-        password: "admin"
-    });
-}
+
+administradores = administradores.filter(a => String(a.email || "").toLowerCase().endsWith("@utu.edu.uy"));
 
 if (!Array.isArray(profesores)) profesores = [];
+profesores.forEach(p => {
+    if (p.ci) p.ci = clean_ci(p.ci);
+});
 if (!profesores.some(p => String(p.email || "").trim().toLowerCase() === "profesor@utu.edu.uy")) {
     profesores.push({
         id: Date.now() + 1,
@@ -2662,8 +2670,8 @@ localStorage.setItem("nexatech_switches", JSON.stringify(switches));
 localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
 localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
 localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
-localStorage.setItem("nexatech_profesores", JSON.stringify(profesores));
-localStorage.setItem("nexatech_administradores", JSON.stringify(administradores));
+localStorage.setItem("nexatech_profesores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(profesores)));
+localStorage.setItem("nexatech_administradores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(administradores)));
 
 pcs.forEach((pc, i) => {
     if (!pc.mapa) pc.mapa = { x: 15 + ((i * 23) % 70), y: 20 + ((i * 17) % 65), z: 0 };
@@ -2691,20 +2699,44 @@ function generarToken(tipo) {
 
 
 /* =====================================================
+   SESIÓN EN MEMORIA / SEGURIDAD LOCAL
+   No se guarda email, usuario, perfil ni contraseña en el almacenamiento del dispositivo.
+===================================================== */
+let nexaSesion = { activa:false, usuario:"", email:"", perfil:"" };
+
+function limpiarCredencialesPersistidasNexa(){
+    ["nexatech_sesion","nexatech_usuario","nexatech_perfil","nexatech_email","nexatech_qr_actual"].forEach(k=>{
+        try { localStorage.removeItem(k); } catch(e) {}
+        try { sessionStorage.removeItem(k); } catch(e) {}
+    });
+}
+
+function quitarCredencialesDeCacheLocalNexa(lista){
+    return Array.isArray(lista) ? lista.map(item=>{
+        const copia={...item};
+        delete copia.password;
+        delete copia.contrasena;
+        return copia;
+    }) : [];
+}
+
+limpiarCredencialesPersistidasNexa();
+
+/* =====================================================
    PERMISOS DE INTERFAZ
    Nota: estos controles de cliente mejoran la interfaz, pero la
    autorización real debe reforzarse en Supabase/RLS.
 ===================================================== */
 function perfilActualNexa() {
-    return localStorage.getItem("nexatech_perfil") || "";
+    return nexaSesion.perfil || "";
 }
 
 function esAdministradorNexa() {
-    return localStorage.getItem("nexatech_sesion") === "true" && perfilActualNexa() === "Administrador";
+    return nexaSesion.activa === true && perfilActualNexa() === "Administrador";
 }
 
 function esProfesorNexa() {
-    return localStorage.getItem("nexatech_sesion") === "true" && perfilActualNexa() === "Profesor";
+    return nexaSesion.activa === true && perfilActualNexa() === "Profesor";
 }
 
 function exigirAdministradorNexa() {
@@ -2716,60 +2748,104 @@ function exigirAdministradorNexa() {
 }
 
 /* =====================================================
+   LÍMITES DE CARACTERES
+   Evita textos excesivamente largos en formularios.
+===================================================== */
+const NEXA_LIMITES_CARACTERES = {
+    email:100, password:64, nombreSalon:50, nombreGrupo:50, nombrePC:30, ciValidar:8,
+    nombreSwitch:30, problemaReparacion:180, nombreProfesor:70, emailProfesor:100, ciProfesor:8,
+    passwordProfesor:64, nombreAdministrador:70, emailAdministrador:100, passwordAdministrador:64,
+    nombreTecnico:70, telefonoTecnico:20
+};
+function aplicarLimitesCaracteresNexa(){
+    Object.entries(NEXA_LIMITES_CARACTERES).forEach(([id,max])=>{
+        const el=document.getElementById(id);
+        if(!el) return;
+        el.maxLength=max;
+        el.setAttribute("maxlength", String(max));
+        el.addEventListener("input",()=>{
+            if(el.value.length>max) el.value=el.value.slice(0,max);
+        });
+    });
+    document.querySelectorAll("textarea").forEach(el=>{
+        if(!el.maxLength || el.maxLength<0) el.maxLength=500;
+    });
+}
+
+/* =====================================================
    LOGIN
 ===================================================== */
 
 document
 .getElementById("loginForm")
 .addEventListener("submit", function(event) {
-
     event.preventDefault();
 
     const tipoUsuario = document.getElementById("tipoUsuario").value;
-    const email = document.getElementById("email").value.trim().toLowerCase();
+    const identificador = document.getElementById("email").value.trim().toLowerCase();
     const password = document.getElementById("password").value;
     const error = document.getElementById("loginError");
     let acceso = false;
-    let nombreUsuario = email;
+    let nombreUsuario = "";
+    let emailCuenta = "";
 
     if (tipoUsuario === "Administrador") {
-        const admin = administradores.find(a =>
-            String(a.email || "").toLowerCase() === email && a.password === password
-        );
-        if (admin) {
-            acceso = true;
-            nombreUsuario = admin.nombre || admin.email;
-        }
-    } else if (tipoUsuario === "Profesor") {
-        if (!email.endsWith("@utu.edu.uy")) {
-            error.textContent = "El profesor debe ingresar su correo institucional @utu.edu.uy.";
+        if (!identificador.endsWith("@utu.edu.uy")) {
+            error.textContent = "El administrador debe ingresar un correo institucional @utu.edu.uy.";
             error.style.display = "block";
             return;
         }
-        const profesor = profesores.find(p =>
-            String(p.email || "").toLowerCase() === email && p.password === password
+        const admin = administradores.find(a =>
+            String(a.email || "").toLowerCase() === identificador && a.password === password
         );
+        if (admin) {
+            acceso = true;
+            emailCuenta = String(admin.email).toLowerCase();
+            nombreUsuario = admin.nombre || admin.email;
+        }
+    } else if (tipoUsuario === "Profesor") {
+        let profesor = null;
+
+        if (identificador.includes("@")) {
+            if (!identificador.endsWith("@utu.edu.uy")) {
+                error.textContent = "El profesor debe ingresar un correo institucional @utu.edu.uy.";
+                error.style.display = "block";
+                return;
+            }
+            profesor = profesores.find(p =>
+                String(p.email || "").toLowerCase() === identificador && p.password === password
+            );
+        } else {
+            const ci = clean_ci(identificador);
+            if (!validate_ci(ci)) {
+                error.textContent = "Ingresá un correo @utu.edu.uy o una C.I. uruguaya válida.";
+                error.style.display = "block";
+                return;
+            }
+            profesor = profesores.find(p =>
+                clean_ci(p.ci || p.cedula || "") === ci && p.password === password
+            );
+        }
+
         if (profesor) {
             acceso = true;
-            nombreUsuario = profesor.nombre || profesor.email;
+            emailCuenta = String(profesor.email || "").toLowerCase();
+            nombreUsuario = profesor.nombre || profesor.email || identificador;
         }
     }
 
     if (acceso) {
         error.style.display = "none";
-        // Segundo paso: autorización mediante QR en el celular.
-        // La sesión NO se crea hasta que Supabase confirme el segundo factor.
-        window.__nexa_2fa_pending = { email, tipoUsuario, nombreUsuario };
+        window.__nexa_2fa_pending = { email: emailCuenta, tipoUsuario, nombreUsuario };
         iniciarSegundoPasoQR();
         return;
     }
 
     error.textContent = tipoUsuario === "Profesor"
-        ? "Profesor no registrado o contraseña incorrecta. Pedile al administrador que registre tu cuenta."
-        : "Administrador no registrado o contraseña incorrecta. Solo pueden entrar las cuentas que agregaste.";
+        ? "Profesor no registrado o contraseña incorrecta."
+        : "Administrador no registrado o contraseña incorrecta. Usá una cuenta @utu.edu.uy.";
     error.style.display = "block";
 });
-
 
 /* =====================================================
    MOSTRAR APP Y CONTROL DE PERMISOS
@@ -2778,9 +2854,13 @@ document
 function mostrarApp() {
 
     const perfilValidado = perfilActualNexa();
-    if (localStorage.getItem("nexatech_sesion") !== "true" || !["Administrador", "Profesor"].includes(perfilValidado)) {
-        localStorage.removeItem("nexatech_sesion");
-        document.getElementById("app").style.display = "none";
+    const emailSesion = String(nexaSesion.email || "").toLowerCase();
+    if ((perfilValidado === "Administrador" || perfilValidado === "Profesor") && !emailSesion.endsWith("@utu.edu.uy")) {
+        cerrarSesion();
+        return;
+    }
+    if (!nexaSesion.activa || !["Administrador", "Profesor"].includes(perfilValidado)) {
+            document.getElementById("app").style.display = "none";
         document.getElementById("loginPage").style.display = "flex";
         return;
     }
@@ -2793,15 +2873,9 @@ function mostrarApp() {
     .getElementById("app")
     .style.display = "block";
 
-    const usuario =
-        localStorage.getItem(
-            "nexatech_usuario"
-        ) || "Administrador";
+    const usuario = nexaSesion.usuario || "Administrador";
 
-    const perfil =
-        localStorage.getItem(
-            "nexatech_perfil"
-        ) || "Administrador";
+    const perfil = nexaSesion.perfil || "Administrador";
 
     document
     .getElementById("usuarioActual")
@@ -2838,18 +2912,8 @@ function mostrarApp() {
 
 function cerrarSesion() {
 
-    localStorage.removeItem(
-        "nexatech_sesion"
-    );
-
-    localStorage.removeItem(
-        "nexatech_usuario"
-    );
-
-    localStorage.removeItem(
-        "nexatech_perfil"
-    );
-    localStorage.removeItem("nexatech_email");
+    nexaSesion = { activa:false, usuario:"", email:"", perfil:"" };
+    limpiarCredencialesPersistidasNexa();
 
     document.body.classList.remove("rol-profesor");
 
@@ -3006,11 +3070,13 @@ async function revisarSolicitudQR(token) {
 
         if (solicitud.status === "approved") {
             const pending2fa = window.__nexa_2fa_pending;
-            localStorage.setItem("nexatech_sesion", "true");
-            localStorage.setItem("nexatech_usuario", pending2fa?.nombreUsuario || solicitud.email);
-            localStorage.setItem("nexatech_email", String(pending2fa?.email || solicitud.email || "").toLowerCase());
-            localStorage.setItem("nexatech_perfil", pending2fa?.tipoUsuario || solicitud.role);
-            localStorage.removeItem("nexatech_qr_actual");
+            nexaSesion = {
+                activa:true,
+                usuario: pending2fa?.nombreUsuario || solicitud.email,
+                email: String(pending2fa?.email || solicitud.email || "").toLowerCase(),
+                perfil: pending2fa?.tipoUsuario || solicitud.role
+            };
+            limpiarCredencialesPersistidasNexa();
             window.__nexa_2fa_pending = null;
 
             document.getElementById("qrCodigo").textContent = "Acceso autorizado. Iniciando sesión…";
@@ -3306,8 +3372,8 @@ function aplicarEstadoRemoto(s) {
     localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
     localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
     localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
-    localStorage.setItem("nexatech_profesores", JSON.stringify(profesores));
-    localStorage.setItem("nexatech_administradores", JSON.stringify(administradores));
+    localStorage.setItem("nexatech_profesores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(profesores)));
+    localStorage.setItem("nexatech_administradores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(administradores)));
 }
 
 async function leerEstadoRemoto({forzar=false}={}) {
@@ -3538,8 +3604,8 @@ function guardar() {
     localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
     localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
     localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
-    localStorage.setItem("nexatech_profesores", JSON.stringify(profesores));
-    localStorage.setItem("nexatech_administradores", JSON.stringify(administradores));
+    localStorage.setItem("nexatech_profesores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(profesores)));
+    localStorage.setItem("nexatech_administradores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(administradores)));
 
     if (supabaseClient && !window.__nexa_loading_remote) {
         clearTimeout(nexaSaveTimer);
@@ -3732,9 +3798,9 @@ function eliminarGrupo(salonId, grupoId) {
 ===================================================== */
 function identidadNexa() {
     return {
-        email: String(localStorage.getItem("nexatech_email") || "").toLowerCase(),
-        nombre: localStorage.getItem("nexatech_usuario") || "Usuario",
-        perfil: localStorage.getItem("nexatech_perfil") || ""
+        email: String(nexaSesion.email || "").toLowerCase(),
+        nombre: nexaSesion.usuario || "Usuario",
+        perfil: nexaSesion.perfil || ""
     };
 }
 function fechaDiaNexa(d=new Date()) { return d.toISOString().slice(0,10); }
@@ -3747,15 +3813,18 @@ function registrarCheckin() {
     if(!u.email){alert("No hay una sesión activa.");return;}
     const hoy=fechaDiaNexa();
     const abierto=checkins.find(x=>x.email===u.email&&x.fecha===hoy&&!x.checkout);
-    if(abierto){alert("Ya tenés un check-in abierto en la PC " + (pcs.find(p=>String(p.id)===String(abierto.pc))?.nombre || "seleccionada") + ".");return;}
-    const pcId=document.getElementById("checkinPC")?.value || "";
-    if(!pcId){alert("Seleccioná la PC específica que vas a utilizar.");return;}
-    const pc=pcs.find(p=>String(p.id)===String(pcId));
-    if(!pc){alert("La PC seleccionada no existe.");return;}
-    if(!pcDisponibleParaCheckin(pcId,u.email)){alert("Esa PC ya tiene un check-in abierto.");return;}
-    checkins.push({id:Date.now(),email:u.email,nombre:u.nombre,perfil:u.perfil,fecha:hoy,checkin:new Date().toISOString(),checkout:"",pc:Number(pcId),pcNombre:pc.nombre,salon:pc.salon});
+    if(abierto){alert("Ya tenés un check-in abierto.");return;}
+    checkins.push({
+        id:Date.now(),
+        email:u.email,
+        nombre:u.nombre,
+        perfil:u.perfil,
+        fecha:hoy,
+        checkin:new Date().toISOString(),
+        checkout:""
+    });
     guardar(); actualizar();
-    alert("Check-in registrado en " + pc.nombre + " a las " + horaNexa() + ".");
+    alert("Check-in registrado a las " + horaNexa() + ".");
 }
 function registrarCheckout() {
     const u=identidadNexa();
@@ -3765,8 +3834,7 @@ function registrarCheckout() {
     if(!abierto){alert("No hay un check-in abierto para cerrar.");return;}
     abierto.checkout=new Date().toISOString();
     guardar(); actualizar();
-    const pc=pcs.find(p=>String(p.id)===String(abierto.pc));
-    alert("Check-out registrado de " + (pc?.nombre || abierto.pcNombre || "la PC") + " a las " + horaNexa() + ".");
+    alert("Check-out registrado a las " + horaNexa() + ".");
 }
 function actualizarCheckinNexa(){
     const u=identidadNexa(), hoy=fechaDiaNexa();
@@ -3775,12 +3843,22 @@ function actualizarCheckinNexa(){
     const adminHist=document.getElementById("checkinAdminHistorial");
     if(!estado)return;
     const abierto=checkins.find(x=>x.email===u.email&&x.fecha===hoy&&!x.checkout);
-    estado.innerHTML=abierto ? "Estado: <strong>EN JORNADA</strong> · " + escapeHTML(pcs.find(p=>String(p.id)===String(abierto.pc))?.nombre || abierto.pcNombre || "PC") + " · entrada " + new Date(abierto.checkin).toLocaleTimeString("es-UY") : "Estado: <strong>FUERA</strong>";
+    estado.innerHTML=abierto
+        ? "Estado: <strong>EN JORNADA</strong> · entrada " + new Date(abierto.checkin).toLocaleTimeString("es-UY")
+        : "Estado: <strong>FUERA</strong>";
     const propios=checkins.filter(x=>x.email===u.email).slice(-12).reverse();
-    hist.innerHTML=propios.length?'<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>PC</th></tr></thead><tbody>'+propios.map(x=>{const pc=pcs.find(p=>String(p.id)===String(x.pc));return `<tr><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td><td>${escapeHTML(pc?.nombre||x.pcNombre||"—")}</td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Todavía no hay movimientos.</div>';
+    hist.innerHTML=propios.length
+        ? '<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th></tr></thead><tbody>'+
+          propios.map(x=>`<tr><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td></tr>`).join('')+
+          '</tbody></table></div>'
+        : '<div class="empty">Todavía no hay movimientos.</div>';
     if(esAdministradorNexa()&&adminHist){
         const all=checkins.slice().sort((a,b)=>String(b.checkin).localeCompare(String(a.checkin))).slice(0,40);
-        adminHist.innerHTML=all.length?'<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Usuario</th><th>Perfil</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>PC</th></tr></thead><tbody>'+all.map(x=>{const pc=pcs.find(p=>String(p.id)===String(x.pc));return `<tr><td>${escapeHTML(x.email)}</td><td>${escapeHTML(x.perfil)}</td><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td><td>${escapeHTML(pc?.nombre||x.pcNombre||"—")}</td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Sin movimientos.</div>';
+        adminHist.innerHTML=all.length
+            ? '<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Usuario</th><th>Perfil</th><th>Fecha</th><th>Entrada</th><th>Salida</th></tr></thead><tbody>'+
+              all.map(x=>`<tr><td>${escapeHTML(x.email)}</td><td>${escapeHTML(x.perfil)}</td><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td></tr>`).join('')+
+              '</tbody></table></div>'
+            : '<div class="empty">Sin movimientos.</div>';
     }
 }
 function prepararSelectMapaNexa(){
@@ -3794,10 +3872,10 @@ function centrarMapaNexa(){
     const salonId=document.getElementById("mapSalonSelect")?.value;
     const lista=pcs.filter(p=>String(p.salon)===String(salonId));
     lista.forEach((pc,i)=>{pc.mapa={x:18+(i%5)*16,y:20+Math.floor(i/5)*22,z:0};});
-    guardar();renderMapa3DNexa();
+    guardar();renderMapa2DNexa();
 }
 function claseMapaPC(pc){return pc.estado==="En reparación"?"repair":pc.estado==="Fuera de servicio"?"off":pc.estado==="Sin internet"?"net":""}
-function renderMapa3DNexa(){
+function renderMapa2DNexa(){
     const wrap=document.getElementById("mapaPCs"), sel=document.getElementById("mapSalonSelect"), map=document.getElementById("mapa3D");
     if(!wrap||!sel||!map)return;
     const salonId=sel.value;
@@ -3805,39 +3883,34 @@ function renderMapa3DNexa(){
     const lista=pcs.filter(p=>String(p.salon)===String(salonId));
     lista.forEach((pc,i)=>{
         if(!pc.mapa || !Number.isFinite(Number(pc.mapa.x)) || !Number.isFinite(Number(pc.mapa.y))){
-            pc.mapa={x:18+(i%5)*16,y:20+Math.floor(i/5)*22,z:0};
+            pc.mapa={x:15+(i%5)*17,y:18+Math.floor(i/5)*22,z:0};
         }
         const el=document.createElement("div");
         el.className="nexa-map-pc "+claseMapaPC(pc);
         el.dataset.id=String(pc.id);
         el.innerHTML=`<span class="pc-led"></span><span>${escapeHTML(pc.nombre)}</span>`;
-
         const draw=()=>{
-            const x=Math.max(4,Math.min(96,Number(pc.mapa.x)||4));
-            const y=Math.max(4,Math.min(96,Number(pc.mapa.y)||4));
-            const z=Math.max(0,Math.min(120,Number(pc.mapa.z)||0));
+            const x=Math.max(7,Math.min(93,Number(pc.mapa.x)||7));
+            const y=Math.max(8,Math.min(92,Number(pc.mapa.y)||8));
             el.style.left=x+"%";
             el.style.top=y+"%";
-            el.style.transform=`translate(-50%,-50%) translateY(${-z}px) scale(${1+z/300})`;
-            el.title=pc.nombre+" · X "+Math.round(x)+" · Y "+Math.round(y)+" · Z "+Math.round(z);
+            el.style.transform="translate(-50%,-50%)";
+            el.title=pc.nombre+" · X "+Math.round(x)+" · Y "+Math.round(y);
         };
         draw();
 
-        let dragging=false, lastX=0, lastY=0, moved=false;
+        let dragging=false,lastX=0,lastY=0,moved=false;
         const finalizar=()=>{
             if(!dragging)return;
             dragging=false;
             el.classList.remove("dragging");
-            if(moved){ guardar(); }
+            if(moved) guardar();
             moved=false;
         };
-
         el.addEventListener("pointerdown",e=>{
             if(!esAdministradorNexa())return;
-            e.preventDefault();
-            e.stopPropagation();
-            dragging=true; moved=false;
-            lastX=e.clientX; lastY=e.clientY;
+            e.preventDefault(); e.stopPropagation();
+            dragging=true;moved=false;lastX=e.clientX;lastY=e.clientY;
             el.classList.add("dragging");
             try{el.setPointerCapture(e.pointerId);}catch(_){}
         });
@@ -3848,25 +3921,54 @@ function renderMapa3DNexa(){
             const dx=(e.clientX-lastX)/rect.width*100;
             const dy=(e.clientY-lastY)/rect.height*100;
             if(Math.abs(dx)+Math.abs(dy)>0){
-                pc.mapa.x=Math.max(4,Math.min(96,(Number(pc.mapa.x)||4)+dx));
-                pc.mapa.y=Math.max(4,Math.min(96,(Number(pc.mapa.y)||4)+dy));
-                moved=true; draw();
+                pc.mapa.x=Math.max(7,Math.min(93,(Number(pc.mapa.x)||7)+dx));
+                pc.mapa.y=Math.max(8,Math.min(92,(Number(pc.mapa.y)||8)+dy));
+                moved=true;draw();
             }
-            lastX=e.clientX; lastY=e.clientY;
+            lastX=e.clientX;lastY=e.clientY;
         });
-        el.addEventListener("pointerup",e=>{try{el.releasePointerCapture(e.pointerId);}catch(_){} finalizar();});
+        el.addEventListener("pointerup",e=>{try{el.releasePointerCapture(e.pointerId);}catch(_){}finalizar();});
         el.addEventListener("pointercancel",finalizar);
         el.addEventListener("lostpointercapture",finalizar);
-        el.addEventListener("wheel",e=>{
-            if(!esAdministradorNexa())return;
-            e.preventDefault();
-            e.stopPropagation();
-            pc.mapa.z=Math.max(0,Math.min(120,(Number(pc.mapa.z)||0)-(e.deltaY/10)));
-            draw();
-            guardar();
-        },{passive:false});
         wrap.appendChild(el);
     });
+}
+
+function agregarPCDesdeMapaNexa(){
+    if(!exigirAdministradorNexa())return;
+    const salonId=document.getElementById("mapSalonSelect")?.value;
+    if(!salonId){alert("Seleccioná un salón.");return;}
+    const nombre=prompt("Nombre de la PC:","PC-"+(pcs.length+1));
+    if(!nombre||!nombre.trim())return;
+    const pc={
+        id:Date.now(),
+        nombre:nombre.trim(),
+        salon:String(salonId),
+        estado:"Funcionando",
+        qrToken:generarToken("PC"),
+        fechaRegistro:new Date().toLocaleDateString(),
+        mapa:{x:50,y:50,z:0}
+    };
+    pcs.push(pc);
+    guardar();
+    actualizar();
+    setTimeout(()=>{
+        const sel=document.getElementById("mapSalonSelect");
+        if(sel)sel.value=String(salonId);
+        renderMapa2DNexa();
+    },50);
+}
+
+function centrarMapaNexa(){
+    if(!exigirAdministradorNexa())return;
+    const sel=document.getElementById("mapSalonSelect");
+    const salonId=sel?.value;
+    const lista=pcs.filter(p=>String(p.salon)===String(salonId));
+    lista.forEach((pc,i)=>{
+        pc.mapa={x:18+(i%5)*17,y:20+Math.floor(i/5)*23,z:0};
+    });
+    guardar();
+    renderMapa2DNexa();
 }
 
 /* =====================================================
@@ -4177,18 +4279,18 @@ function imprimirQRPC() {
 .nexa-table th{background:#17171b;color:#fff}
 .nexa-table tr:last-child td{border-bottom:0}
 .nexa-2fa-note{margin-top:12px;padding:10px 12px;border:1px solid rgba(139,0,0,.55);background:rgba(139,0,0,.12);border-radius:9px;color:var(--text-muted);font-size:12px;line-height:1.5}
-.nexa-map-wrap{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:16px;background:radial-gradient(circle at 50% 35%,#202026 0,#0b0b0e 65%);min-height:540px;touch-action:none;perspective:900px}
+.nexa-map-wrap{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:16px;background:#5a351d;min-height:540px;touch-action:none}
 .nexa-map-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.nexa-map-stage{position:absolute;inset:0;transform-style:preserve-3d;pointer-events:none}
-.nexa-map-floor{position:absolute;left:7%;top:9%;width:86%;height:82%;border:2px solid rgba(255,255,255,.16);background:repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 38px),repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 38px),linear-gradient(145deg,#1b1b21,#0d0d10);box-shadow:inset 0 0 0 1px rgba(139,0,0,.2),0 30px 70px rgba(0,0,0,.6);transform:rotateX(58deg) translateY(34px) scaleY(.82);transform-origin:center bottom}
-.nexa-map-wall{position:absolute;background:linear-gradient(#29292f,#15151a);border:1px solid #3b3b43;box-shadow:0 8px 20px rgba(0,0,0,.5);z-index:2}
-.nexa-map-wall.w1{left:7%;top:9%;width:86%;height:20px}
-.nexa-map-wall.w2{left:7%;top:9%;width:20px;height:82%}
+.nexa-map-stage{position:absolute;inset:0;pointer-events:none}
+.nexa-map-floor{position:absolute;left:4%;top:5%;width:92%;height:90%;border:4px solid #3b2112;border-radius:8px;background-color:#9a6338;background-image:repeating-linear-gradient(90deg,rgba(62,31,13,.30) 0 2px,transparent 2px 92px),repeating-linear-gradient(0deg,rgba(255,218,166,.10) 0 2px,transparent 2px 46px),linear-gradient(90deg,rgba(255,255,255,.05),rgba(0,0,0,.08));box-shadow:inset 0 0 35px rgba(45,20,8,.35),0 18px 35px rgba(0,0,0,.35)}
+.nexa-map-wall{position:absolute;background:#4a2b19;border:2px solid #2b180d;box-shadow:0 6px 12px rgba(0,0,0,.35);z-index:2}
+.nexa-map-wall.w1{left:4%;top:5%;width:92%;height:18px}
+.nexa-map-wall.w2{left:4%;top:5%;width:18px;height:90%}
 #mapaPCs{position:absolute;inset:0;z-index:5}
-.nexa-map-pc{position:absolute;pointer-events:auto;width:82px;height:62px;border:1px solid rgba(255,255,255,.28);border-radius:10px;background:linear-gradient(145deg,#292a31,#0c0c0f);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:11px;cursor:grab;user-select:none;touch-action:none;box-shadow:0 18px 24px rgba(0,0,0,.55),0 0 0 2px rgba(139,0,0,.15);will-change:transform,left,top}
-.nexa-map-pc.dragging{cursor:grabbing;z-index:20;box-shadow:0 25px 35px rgba(0,0,0,.7),0 0 0 2px rgba(180,0,0,.5)}
-.nexa-map-pc .pc-led{width:7px;height:7px;border-radius:50%;background:#2e7d32;box-shadow:0 0 8px rgba(46,125,50,.7);margin-bottom:5px}
-.nexa-map-pc.repair .pc-led{background:#b08000}.nexa-map-pc.off .pc-led{background:#b03030}.nexa-map-pc.net .pc-led{background:#0055a5}
+.nexa-map-pc{position:absolute;pointer-events:auto;width:86px;height:64px;border:2px solid #292929;border-radius:10px;background:linear-gradient(145deg,#363636,#111);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:11px;cursor:grab;user-select:none;touch-action:none;box-shadow:0 8px 15px rgba(0,0,0,.38);will-change:left,top}
+.nexa-map-pc.dragging{cursor:grabbing;z-index:20;box-shadow:0 14px 25px rgba(0,0,0,.55)}
+.nexa-map-pc .pc-led{width:7px;height:7px;border-radius:50%;background:#35b54a;box-shadow:0 0 8px rgba(53,181,74,.8);margin-bottom:5px}
+.nexa-map-pc.repair .pc-led{background:#e2a400}.nexa-map-pc.off .pc-led{background:#e23b3b}.nexa-map-pc.net .pc-led{background:#2685e8}
 .nexa-map-help{color:var(--text-muted);font-size:12px;margin-top:9px}
 @media(max-width:850px){.nexa-checkin-wrap{grid-template-columns:1fr}.nexa-map-wrap{min-height:430px}.nexa-map-pc{width:70px;height:54px;font-size:10px}}
 </style>
@@ -4371,7 +4473,7 @@ function agregarReparacion(event) {
     const estado = esAdministradorNexa()
         ? document.getElementById("estadoReparacion").value
         : "Pendiente";
-    const reportadoPor = String(localStorage.getItem("nexatech_email") || "").trim().toLowerCase();
+    const reportadoPor = String(nexaSesion.email || "").trim().toLowerCase();
 
     if (!pc || !problema) {
         return;
@@ -4552,19 +4654,6 @@ function actualizarSelects() {
 
     });
 
-
-    const checkinPC = document.getElementById("checkinPC");
-    if (checkinPC) {
-        const actual = checkinPC.value;
-        const ocupadas = new Set(checkins.filter(x => !x.checkout).map(x => String(x.pc)));
-        checkinPC.innerHTML = `<option value="">Seleccionar PC</option>` + pcs.map(pc => {
-            const salon = salones.find(s => String(s.id) === String(pc.salon));
-            const ocupada = ocupadas.has(String(pc.id));
-            const texto = `${escapeHTML(pc.nombre)} · ${escapeHTML(salon?.nombre || "Sin salón")}${ocupada ? " · OCUPADA" : ""}`;
-            return `<option value="${pc.id}" ${ocupada ? "disabled" : ""}>${texto}</option>`;
-        }).join("");
-        if (pcs.some(pc => String(pc.id) === String(actual))) checkinPC.value = actual;
-    }
 
 }
 
@@ -4894,7 +4983,7 @@ function mostrarReparaciones() {
 
     const reparacionesVisibles = esAdministradorNexa()
         ? reparaciones
-        : reparaciones.filter(r => String(r.reportadoPor || "").toLowerCase() === String(localStorage.getItem("nexatech_email") || "").toLowerCase());
+        : reparaciones.filter(r => String(r.reportadoPor || "").toLowerCase() === String(nexaSesion.email || "").toLowerCase());
 
     if (reparacionesVisibles.length === 0) {
 
@@ -4982,6 +5071,10 @@ function agregarAdministrador(event) {
         alert("Completá todos los campos. La contraseña debe tener al menos 8 caracteres.");
         return;
     }
+    if (!email.endsWith("@utu.edu.uy")) {
+        alert("El correo del administrador debe terminar en @utu.edu.uy.");
+        return;
+    }
     if (administradores.some(a => String(a.email || "").toLowerCase() === email)) {
         alert("Ya existe un administrador con ese email.");
         return;
@@ -5003,7 +5096,7 @@ function eliminarAdministrador(id) {
         alert("No podés eliminar el último administrador.");
         return;
     }
-    const actual = String(localStorage.getItem("nexatech_email") || "").toLowerCase();
+    const actual = String(nexaSesion.email || "").toLowerCase();
     const objetivo = administradores.find(a => a.id === id);
     if (objetivo && String(objetivo.email || "").toLowerCase() === actual) {
         alert("No podés eliminar la cuenta con la que estás conectado.");
@@ -5047,16 +5140,24 @@ function agregarProfesor(event) {
     const email =
         document.getElementById("emailProfesor").value.trim().toLowerCase();
 
+    const ci =
+        clean_ci(document.getElementById("ciProfesor").value);
+
     const password =
         document.getElementById("passwordProfesor").value;
 
-    if (!nombre || !email || !password) {
+    if (!nombre || !email || !ci || !password) {
         alert("Complete todos los campos.");
         return;
     }
 
     if (!email.endsWith("@utu.edu.uy")) {
         alert("El correo del profesor debe terminar en @utu.edu.uy.");
+        return;
+    }
+
+    if (!validate_ci(ci)) {
+        alert("La C.I. del profesor no es válida.");
         return;
     }
 
@@ -5071,6 +5172,7 @@ function agregarProfesor(event) {
         id: Date.now(),
         nombre: nombre,
         email: email,
+        ci: ci,
         password: password
     });
 
@@ -5078,6 +5180,7 @@ function agregarProfesor(event) {
 
     document.getElementById("nombreProfesor").value = "";
     document.getElementById("emailProfesor").value = "";
+    document.getElementById("ciProfesor").value = "";
     document.getElementById("passwordProfesor").value = "";
 
     mostrarProfesores();
@@ -5230,7 +5333,7 @@ function actualizar() {
     mostrarPCs();
     actualizarCheckinNexa();
     prepararSelectMapaNexa();
-    renderMapa3DNexa();
+    renderMapa2DNexa();
 
     mostrarSwitches();
 
@@ -5337,7 +5440,7 @@ function actualizarPanelInicio() {
         const anio = document.getElementById("footerAnio");
         if (anio) anio.textContent = new Date().getFullYear();
 
-        const miEmail = String(localStorage.getItem("nexatech_email") || "").toLowerCase();
+        const miEmail = String(nexaSesion.email || "").toLowerCase();
         const visibles = esAdministradorNexa()
             ? reparaciones
             : reparaciones.filter(r => String(r.reportadoPor || "").toLowerCase() === miEmail);
@@ -6029,10 +6132,9 @@ function escapeHTML(text) {
     }
 
     // La página siempre pide iniciar sesión manualmente. No reutilizar una sesión anterior.
-    localStorage.removeItem("nexatech_sesion");
-    localStorage.removeItem("nexatech_usuario");
-    localStorage.removeItem("nexatech_perfil");
-    localStorage.removeItem("nexatech_email");
+    nexaSesion = { activa:false, usuario:"", email:"", perfil:"" };
+    limpiarCredencialesPersistidasNexa();
+    aplicarLimitesCaracteresNexa();
 
     window.__nexa_loading_remote = true;
     await cargarDesdeSupabase();
