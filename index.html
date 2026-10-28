@@ -1066,6 +1066,11 @@ main.content {
 
 /* ===== NexaTech: panel profesional + móvil ===== */
 .nexa-dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}.nexa-stat{background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.025));border:1px solid var(--border);border-radius:14px;padding:16px;min-height:92px}.nexa-stat .num{font-size:28px;font-weight:800;line-height:1.1;margin-top:8px}.nexa-stat .lbl{color:var(--text-muted);font-size:13px}.nexa-alert{border:1px solid rgba(255,80,80,.25);background:rgba(180,20,20,.08);border-radius:10px;padding:10px 12px;margin:8px 0}.nexa-alert.ok{border-color:rgba(60,200,120,.25);background:rgba(60,200,120,.07)}.nexa-audit{display:grid;gap:8px;max-height:360px;overflow:auto}.nexa-audit-item{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.025)}.nexa-audit-item small{color:var(--text-muted);display:block;margin-top:4px}.nexa-trash-item{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:8px 0}@media(max-width:900px){.nexa-dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.nexa-dashboard-grid{grid-template-columns:1fr}.nexa-stat .num{font-size:24px}.nexa-trash-item{align-items:flex-start;flex-direction:column}.nexa-trash-item .button{width:100%}.panel,.card{padding:14px!important}.menu{gap:6px}.menu button{font-size:12px;padding:9px 10px}.barra-panel-inner{padding-left:8px;padding-right:8px}}
+
+/* MEJORAS PROFESIONALES NEXATECH */
+.nexa-header-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}.nexa-header-tools input{min-width:280px;max-width:520px;flex:1}.nexa-connection{font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface)}.nexa-connection.online{color:#7ee787;border-color:#2e7d32}.nexa-connection.offline{color:#ff9b9b}.nexa-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.nexa-filter-row>*{min-width:160px}.nexa-search-results{display:grid;gap:8px}.nexa-search-result{padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-alt);cursor:pointer}.nexa-search-result:hover{border-color:var(--border-light)}.nexa-profile-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}.nexa-profile-grid>div{display:flex;flex-direction:column;gap:5px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface-alt)}.nexa-calendar{display:grid;gap:8px}.nexa-calendar-item{padding:10px 12px;border-left:4px solid var(--border-light);background:var(--surface-alt);border-radius:8px}.nexa-calendar-item.alta{border-left-color:#ff9800}.nexa-calendar-item.critica{border-left-color:#e53935}.nexa-diagnostics{display:grid;gap:7px;margin-bottom:12px}.nexa-diag{padding:9px 12px;border-radius:8px;background:var(--surface-alt);border:1px solid var(--border)}.nexa-diag.ok{border-color:#2e7d32}.nexa-diag.bad{border-color:#b03030}.priority-badge{display:inline-block;padding:2px 7px;border-radius:999px;font-size:11px;border:1px solid var(--border)}
+@media(max-width:700px){.nexa-header-tools input{min-width:100%;}.nexa-filter-row>*{min-width:100%;}}
+
 </style>
 
 
@@ -1638,6 +1643,11 @@ main.content {
             </button>
 
             <button
+                onclick="mostrarSeccion('miPerfilNexa', this)">
+                Mi perfil
+            </button>
+
+            <button
                 onclick="mostrarSeccion('documentacion', this)">
                 Documentación
             </button>
@@ -1664,6 +1674,10 @@ main.content {
                 <p>
                     Plataforma de soporte y control técnico
                 </p>
+                <div class="nexa-header-tools">
+                    <input id="busquedaGlobalNexa" type="search" maxlength="100" placeholder="Buscar PC, salón, profesor, reparación..." oninput="buscarGlobalNexa(this.value)">
+                    <span id="estadoConexionNexa" class="nexa-connection offline">● Sin comprobar</span>
+                </div>
 
             </div>
 
@@ -2195,6 +2209,21 @@ main.content {
 
                     </div>
 
+                    <div class="field">
+                        <label>Prioridad</label>
+                        <select id="prioridadReparacion">
+                            <option>Baja</option>
+                            <option selected>Media</option>
+                            <option>Alta</option>
+                            <option>Crítica</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label>Fecha objetivo</label>
+                        <input type="date" id="fechaObjetivoReparacion">
+                    </div>
+
                     <button class="button">
                         Registrar reparación
                     </button>
@@ -2206,6 +2235,18 @@ main.content {
             <div class="panel">
 
                 <h2>Reparaciones registradas</h2>
+
+                <div class="nexa-filter-row">
+                    <select id="filtroPrioridadNexa" onchange="mostrarReparaciones()">
+                        <option value="">Todas las prioridades</option>
+                        <option>Baja</option><option>Media</option><option>Alta</option><option>Crítica</option>
+                    </select>
+                    <select id="filtroEstadoReparacionNexa" onchange="mostrarReparaciones()">
+                        <option value="">Todos los estados</option>
+                        <option>Pendiente</option><option>En reparación</option><option>Reparada</option>
+                    </select>
+                    <input id="filtroTextoReparacionNexa" maxlength="80" placeholder="Filtrar problema o PC" oninput="mostrarReparaciones()">
+                </div>
 
                 <div
                     id="listaReparaciones"
@@ -2416,11 +2457,46 @@ main.content {
                 <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><h2 style="margin:0">Papelera</h2><p style="color:var(--text-muted);margin:5px 0 0">Los elementos eliminados pueden restaurarse.</p></div><button class="button button-danger" type="button" onclick="vaciarPapeleraNexa()">Vaciar papelera</button></div>
                 <div id="nexaPapelera" style="margin-top:14px"></div>
             </div>
-        </section>
+                    <div class="panel">
+                <h2>Búsqueda global</h2>
+                <p class="item-info">Busca rápidamente PCs, salones, profesores, técnicos, switches y reparaciones.</p>
+                <div id="resultadosBusquedaNexa" class="nexa-search-results"><div class="item-info">Escribí algo en la barra superior.</div></div>
+            </div>
+            <div class="panel">
+                <h2>Agenda de reparaciones</h2>
+                <div id="agendaReparacionesNexa" class="nexa-calendar"></div>
+            </div>
+            <div class="panel">
+                <h2>Diagnóstico del sistema</h2>
+                <div id="diagnosticoNexa" class="nexa-diagnostics"></div>
+                <button class="button button-secondary" type="button" onclick="ejecutarDiagnosticoNexa()">Ejecutar diagnóstico</button>
+            </div>
+</section>
 
         <!-- =================================================
              DOCUMENTACIÓN
         ================================================== -->
+
+        <section id="miPerfilNexa" class="section">
+            <div class="panel">
+                <h2>Mi perfil</h2>
+                <div class="nexa-profile-grid">
+                    <div><span class="item-info">Nombre</span><strong id="perfilNombreNexa">-</strong></div>
+                    <div><span class="item-info">Correo</span><strong id="perfilEmailNexa">-</strong></div>
+                    <div><span class="item-info">Rol</span><strong id="perfilRolNexa">-</strong></div>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>Cambiar contraseña</h2>
+                <p class="item-info">La contraseña no se guarda en el navegador. El cambio se aplica a tu cuenta actual.</p>
+                <form class="form" onsubmit="cambiarContrasenaNexa(event)">
+                    <div class="field"><label>Contraseña actual</label><input id="passActualNexa" type="password" maxlength="64" autocomplete="current-password" required></div>
+                    <div class="field"><label>Nueva contraseña</label><input id="passNuevaNexa" type="password" maxlength="64" minlength="8" autocomplete="new-password" required></div>
+                    <div class="field"><label>Repetir nueva contraseña</label><input id="passNueva2Nexa" type="password" maxlength="64" minlength="8" autocomplete="new-password" required></div>
+                    <button class="button" type="submit">Cambiar contraseña</button>
+                </form>
+            </div>
+        </section>
 
         <section id="documentacion" class="section">
 
@@ -4426,6 +4502,8 @@ function agregarReparacion(event) {
     const estado = esAdministradorNexa()
         ? document.getElementById("estadoReparacion").value
         : "Pendiente";
+    const prioridad = document.getElementById("prioridadReparacion")?.value || "Media";
+    const fechaObjetivo = document.getElementById("fechaObjetivoReparacion")?.value || "";
     const reportadoPor = String(nexaSesion.email || "").trim().toLowerCase();
 
     if (!pc || !problema) {
@@ -4441,6 +4519,10 @@ function agregarReparacion(event) {
         problema: problema,
 
         estado: estado,
+
+        prioridad: prioridad,
+
+        fechaObjetivo: fechaObjetivo,
 
         reportadoPor: reportadoPor,
 
@@ -4930,9 +5012,17 @@ function mostrarReparaciones() {
             "listaReparaciones"
         );
 
-    const reparacionesVisibles = esAdministradorNexa()
+    const filtroPrioridad = document.getElementById("filtroPrioridadNexa")?.value || "";
+    const filtroEstado = document.getElementById("filtroEstadoReparacionNexa")?.value || "";
+    const filtroTexto = String(document.getElementById("filtroTextoReparacionNexa")?.value || "").toLowerCase().trim();
+    let reparacionesVisibles = esAdministradorNexa()
         ? reparaciones
         : reparaciones.filter(r => String(r.reportadoPor || "").toLowerCase() === String(nexaSesion.email || "").toLowerCase());
+    reparacionesVisibles = reparacionesVisibles.filter(r => {
+        const pcObj = pcs.find(p => p.id == r.pc);
+        const blob = `${r.problema||""} ${pcObj?.nombre||""}`.toLowerCase();
+        return (!filtroPrioridad || (r.prioridad || "Media") === filtroPrioridad) && (!filtroEstado || r.estado === filtroEstado) && (!filtroTexto || blob.includes(filtroTexto));
+    });
 
     if (reparacionesVisibles.length === 0) {
 
@@ -4976,6 +5066,13 @@ function mostrarReparaciones() {
 
                         Estado:
                         ${escapeHTML(reparacion.estado)}
+
+                        <br>
+
+                        Prioridad:
+                        ${escapeHTML(reparacion.prioridad || "Media")}
+
+                        ${reparacion.fechaObjetivo ? `<br>Fecha objetivo: ${escapeHTML(reparacion.fechaObjetivo)}` : ""}
 
                         <br>
 
@@ -6401,9 +6498,136 @@ function toggleBarraSuperior(abrir) {
 })();
 </script>
 
+
+<script>
+/* =====================================================
+   MEJORAS PROFESIONALES NEXATECH
+===================================================== */
+function buscarGlobalNexa(q){
+  const box=document.getElementById('resultadosBusquedaNexa'); if(!box)return;
+  q=String(q||'').trim().toLowerCase();
+  if(!q){box.innerHTML='<div class="item-info">Escribí algo en la barra superior.</div>';return;}
+  const out=[];
+  const add=(tipo,item,text,section)=>{if(out.length>=30)return; if(String(text||'').toLowerCase().includes(q)) out.push({tipo,item,text,section});};
+  pcs.forEach(x=>add('PC',x,`${x.nombre||''} ${x.estado||''} ${x.salon||''} ${x.numero||''}`,'pcs'));
+  salones.forEach(x=>add('Salón',x,`${x.nombre||''} ${x.descripcion||''}`,'salones'));
+  profesores.forEach(x=>add('Profesor',x,`${x.nombre||''} ${x.email||''} ${x.ci||x.cedula||''}`,'profesores'));
+  tecnicos.forEach(x=>add('Técnico',x,`${x.nombre||''} ${x.telefono||''}`,'tecnicos'));
+  switches.forEach(x=>add('Switch',x,`${x.nombre||''} ${x.ip||''} ${x.salon||''}`,'switches'));
+  reparaciones.forEach(x=>{const pc=pcs.find(p=>p.id==x.pc);add('Reparación',x,`${x.problema||''} ${x.estado||''} ${x.prioridad||''} ${pc?.nombre||''}`,'reparaciones');});
+  if(!out.length){box.innerHTML='<div class="item-info">No se encontraron resultados.</div>';return;}
+  box.innerHTML=out.map(r=>`<div class="nexa-search-result" onclick="mostrarSeccion('${r.section}',document.querySelector('.menu button[onclick*=&quot;${r.section}&quot;]'))"><strong>${escapeHTML(r.tipo)}</strong> — ${escapeHTML(r.item.nombre||r.item.problema||r.item.email||'Elemento')}<div class="item-info">${escapeHTML(r.text)}</div></div>`).join('');
+}
+function actualizarPerfilNexa(){
+  const u=document.getElementById('perfilNombreNexa'),e=document.getElementById('perfilEmailNexa'),r=document.getElementById('perfilRolNexa');
+  if(u)u.textContent=nexaSesion.usuario||'-'; if(e)e.textContent=nexaSesion.email||'-'; if(r)r.textContent=nexaSesion.perfil||'-';
+}
+function cambiarContrasenaNexa(ev){
+  ev.preventDefault();
+  if(!nexaSesion.activa){alert('Iniciá sesión primero.');return;}
+  const actual=document.getElementById('passActualNexa').value,nueva=document.getElementById('passNuevaNexa').value,nueva2=document.getElementById('passNueva2Nexa').value;
+  if(nueva.length<8){alert('La nueva contraseña debe tener al menos 8 caracteres.');return;}
+  if(nueva!==nueva2){alert('Las nuevas contraseñas no coinciden.');return;}
+  const email=String(nexaSesion.email||'').toLowerCase(); let cuenta;
+  if(esAdministradorNexa()) cuenta=administradores.find(a=>String(a.email||'').toLowerCase()===email);
+  else cuenta=profesores.find(a=>String(a.email||'').toLowerCase()===email);
+  if(!cuenta || cuenta.password!==actual){alert('La contraseña actual no es correcta.');return;}
+  cuenta.password=nueva; guardar();
+  document.getElementById('passActualNexa').value='';document.getElementById('passNuevaNexa').value='';document.getElementById('passNueva2Nexa').value='';
+  registrarAuditoriaNexa('Cambio de contraseña','El usuario cambió su contraseña.');
+  alert('Contraseña cambiada correctamente.');
+}
+function actualizarConexionNexa(){
+  const el=document.getElementById('estadoConexionNexa'); if(!el)return;
+  if(!navigator.onLine){el.textContent='● Sin conexión';el.className='nexa-connection offline';return;}
+  if(supabaseClient){el.textContent='● Conectado';el.className='nexa-connection online';}else{el.textContent='● Sin Supabase';el.className='nexa-connection offline';}
+}
+async function ejecutarDiagnosticoNexa(){
+  const box=document.getElementById('diagnosticoNexa');if(!box)return;const rows=[];
+  rows.push([navigator.onLine,'Internet disponible']); rows.push([!!supabaseClient,'Cliente Supabase cargado']);
+  rows.push([typeof QRCode!=='undefined','Librería QR disponible']); rows.push([typeof window.jspdf!=='undefined','Librería PDF disponible']);
+  rows.push([!!nexaSesion?.activa,'Sesión activa']); rows.push([Array.isArray(pcs),'Datos de PCs cargados']); rows.push([Array.isArray(reparaciones),'Datos de reparaciones cargados']);
+  if(supabaseClient&&navigator.onLine){try{const {error}=await supabaseClient.from('nexatech_state').select('id').limit(1);rows.push([!error,'Acceso a Supabase']);}catch(e){rows.push([false,'Acceso a Supabase']);}}
+  box.innerHTML=rows.map(r=>`<div class="nexa-diag ${r[0]?'ok':'bad'}">${r[0]?'✓':'✕'} ${escapeHTML(r[1])}</div>`).join('');
+}
+function actualizarAgendaReparacionesNexa(){
+  const box=document.getElementById('agendaReparacionesNexa');if(!box)return;
+  const items=reparaciones.filter(r=>r.fechaObjetivo).slice().sort((a,b)=>String(a.fechaObjetivo).localeCompare(String(b.fechaObjetivo)));
+  if(!items.length){box.innerHTML='<div class="item-info">No hay reparaciones con fecha objetivo.</div>';return;}
+  box.innerHTML=items.map(r=>{const pc=pcs.find(p=>p.id==r.pc);const cl=String(r.prioridad||'Media').toLowerCase().replace('í','i');return `<div class="nexa-calendar-item ${cl}"><strong>${escapeHTML(r.fechaObjetivo)}</strong> · ${escapeHTML(pc?.nombre||'PC eliminada')}<div class="item-info">${escapeHTML(r.problema)} · ${escapeHTML(r.estado)} · Prioridad ${escapeHTML(r.prioridad||'Media')}</div></div>`;}).join('');
+}
+function abrirFichaPCNexa(id){
+  const pc=pcs.find(p=>p.id==id);if(!pc)return;
+  const reps=reparaciones.filter(r=>r.pc==id);alert(`PC: ${pc.nombre||'Sin nombre'}\nEstado: ${pc.estado||'Sin estado'}\nReparaciones: ${reps.length}\n${reps.map(r=>`- ${r.problema} (${r.estado})`).join('\n')||'Sin reparaciones'}`);
+}
+window.addEventListener('online',actualizarConexionNexa);window.addEventListener('offline',actualizarConexionNexa);
+document.addEventListener('DOMContentLoaded',()=>{actualizarConexionNexa();actualizarPerfilNexa();actualizarAgendaReparacionesNexa();setTimeout(ejecutarDiagnosticoNexa,800);});
+const _actualizarOriginalNexa=window.actualizar;
+window.actualizar=function(){if(typeof _actualizarOriginalNexa==='function')_actualizarOriginalNexa();actualizarPerfilNexa();actualizarAgendaReparacionesNexa();actualizarConexionNexa();};
+</script>
+
+
+<style id="nexa-final-plus-css">
+.nexa-plus-tools{position:fixed;right:18px;bottom:18px;z-index:9998;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;max-width:360px}
+.nexa-plus-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:10px;padding:9px 12px;cursor:pointer;box-shadow:var(--shadow);font-weight:600}
+.nexa-plus-btn:hover{background:var(--surface-alt)}
+.nexa-plus-modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:10000;display:none;align-items:center;justify-content:center;padding:18px}
+.nexa-plus-card{width:min(760px,100%);max-height:90vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow-lg)}
+.nexa-plus-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:14px}
+.nexa-plus-card input,.nexa-plus-card select{width:100%;padding:10px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);border-radius:9px}
+.nexa-plus-list{display:grid;gap:8px;margin-top:12px}.nexa-plus-item{padding:11px;border:1px solid var(--border);border-radius:10px;background:var(--surface-alt)}
+.nexa-plus-ok{color:#67d36b}.nexa-plus-warn{color:#ffd166}.nexa-plus-bad{color:#ff6b6b}
+.nexa-light{--bg:#f3f4f6;--bg-soft:#fff;--surface:#fff;--surface-alt:#f0f1f3;--border:#d4d7dc;--border-light:#b9bdc5;--text:#17181b !important;--text-muted:#4d525b;--text-dim:#6b7078;--shadow:0 3px 14px rgba(0,0,0,.12);--shadow-lg:0 20px 55px rgba(0,0,0,.18)}
+.nexa-global-search{position:sticky;top:8px;z-index:100;background:var(--surface);border:1px solid var(--border);padding:10px;border-radius:12px;margin:8px;box-shadow:var(--shadow)}
+.nexa-global-search input{width:100%;padding:10px;border:1px solid var(--border);background:var(--surface-alt);color:var(--text);border-radius:9px}
+.nexa-notify-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#d33;margin-left:5px}
+@media(max-width:700px){.nexa-plus-tools{right:8px;bottom:8px;max-width:calc(100% - 16px)}.nexa-plus-btn{padding:8px 10px;font-size:12px}.nexa-plus-card{padding:14px}}
+</style>
+<script>
+/* ===== NEXATECH FINAL PLUS ===== */
+(function(){
+  const KEY='nexatech_theme';
+  window.nexaFinal={idleMs:30*60*1000,lastActivity:Date.now(),lockedUntil:0,failures:0};
+  function $id(id){return document.getElementById(id)}
+  function admin(){return typeof esAdministradorNexa==='function'&&esAdministradorNexa()}
+  function addUI(){
+    if($id('nexaPlusTools'))return;
+    const tools=document.createElement('div');tools.id='nexaPlusTools';tools.className='nexa-plus-tools';
+    tools.innerHTML='<button class="nexa-plus-btn" onclick="abrirCentroNexa()">⚙ Centro</button><button class="nexa-plus-btn" onclick="alternarTemaNexa()">☾ Tema</button>';
+    document.body.appendChild(tools);
+    const modal=document.createElement('div');modal.id='nexaPlusModal';modal.className='nexa-plus-modal';
+    modal.innerHTML=`<div class="nexa-plus-card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><h2>Centro NexaTech</h2><button class="nexa-plus-btn" onclick="cerrarCentroNexa()">Cerrar</button></div>
+      <div class="nexa-plus-grid"><button class="nexa-plus-btn" onclick="ejecutarDiagnosticoNexa();mostrarDiagnosticoPlus()">🧪 Diagnóstico</button><button class="nexa-plus-btn" onclick="mostrarNotificacionesNexa()">🔔 Avisos</button><button class="nexa-plus-btn" onclick="copiarResumenNexa()">📋 Copiar resumen</button><button class="nexa-plus-btn" onclick="exportarJSONNexa()">💾 Respaldo JSON</button><button class="nexa-plus-btn" onclick="limpiarRegistrosAntiguosNexa()">🧹 Limpieza</button><button class="nexa-plus-btn" onclick="mostrarSeguridadNexa()">🛡 Seguridad</button></div>
+      <div id="nexaPlusContent" class="nexa-plus-list"><div class="nexa-plus-item">Sesión automática: 30 minutos de inactividad.</div></div></div>`;
+    document.body.appendChild(modal);
+  }
+  window.abrirCentroNexa=()=>{$id('nexaPlusModal').style.display='flex';mostrarNotificacionesNexa()};
+  window.cerrarCentroNexa=()=>{$id('nexaPlusModal').style.display='none'};
+  window.alternarTemaNexa=()=>{document.body.classList.toggle('nexa-light');localStorage.setItem(KEY,document.body.classList.contains('nexa-light')?'light':'dark')};
+  window.mostrarNotificacionesNexa=()=>{const box=$id('nexaPlusContent');if(!box)return;const r=(typeof reparaciones!=='undefined'?reparaciones:[]);const crit=r.filter(x=>String(x.prioridad||'').toLowerCase()==='crítica'||String(x.prioridad||'').toLowerCase()==='critica');const abiertas=r.filter(x=>!['Reparada','Cerrada'].includes(String(x.estado||'')));const jornadas=(typeof checkins!=='undefined'?checkins:[]).filter(x=>x.checkin&&!x.checkout);box.innerHTML='<div class="nexa-plus-item"><strong>🔔 Avisos</strong><br>Reparaciones críticas: '+crit.length+'<br>Reparaciones abiertas: '+abiertas.length+'<br>Jornadas abiertas: '+jornadas.length+'</div>'+(crit.slice(0,10).map(x=>'<div class="nexa-plus-item"><span class="nexa-plus-bad">CRÍTICA</span> · '+escapeHTML(x.problema||'Sin detalle')+'</div>').join('')||'<div class="nexa-plus-item nexa-plus-ok">No hay avisos críticos.</div>')};
+  window.mostrarDiagnosticoPlus=()=>{const box=$id('nexaPlusContent');if(!box)return;ejecutarDiagnosticoNexa();setTimeout(()=>{const d=$id('diagnosticoNexa');box.innerHTML=d?d.innerHTML:'Diagnóstico no disponible.'},150)};
+  window.mostrarSeguridadNexa=()=>{$id('nexaPlusContent').innerHTML='<div class="nexa-plus-item"><strong>🛡 Seguridad</strong><br>Credenciales persistentes: '+(localStorage.getItem('nexatech_email')?'⚠️ detectadas y serán limpiadas':'✅ no detectadas')+'<br>Inactividad: 30 min<br>Bloqueo de intentos: 5 intentos / 5 min<br>Rol actual: '+escapeHTML(String(nexaSesion?.perfil||'Sin sesión'))+'</div>'};
+  window.copiarResumenNexa=async()=>{const txt=`NexaTech\nUsuario: ${nexaSesion?.usuario||'-'}\nRol: ${nexaSesion?.perfil||'-'}\nPCs: ${typeof pcs!=='undefined'?pcs.length:0}\nReparaciones: ${typeof reparaciones!=='undefined'?reparaciones.length:0}\nSalones: ${typeof salones!=='undefined'?salones.length:0}`;try{await navigator.clipboard.writeText(txt);alert('Resumen copiado.')}catch(e){prompt('Copiá el resumen:',txt)}};
+  window.exportarJSONNexa=()=>{if(!admin()){alert('Solo el administrador puede generar un respaldo.');return}const data={version:Date.now(),pcs, salones, profesores, tecnicos, switches, reparaciones, checkins};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='nexatech-respaldo.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+  window.limpiarRegistrosAntiguosNexa=()=>{if(!admin()){alert('Solo el administrador puede limpiar registros.');return}const dias=prompt('¿Eliminar registros de check-in/check-out anteriores a cuántos días?','180');const n=Number(dias);if(!Number.isFinite(n)||n<30){alert('Ingresá un número válido de al menos 30 días.');return}const limite=Date.now()-n*86400000;const antes=checkins.length;checkins=checkins.filter(x=>{const t=Date.parse(x.checkin||x.fecha||'');return !t||t>=limite});guardar();registrarAuditoriaNexa('Limpieza de registros',`Se conservaron registros de los últimos ${n} días.`);alert(`Limpieza completada. Se eliminaron ${antes-checkins.length} registros.`)};
+  function limpiarCred(){['nexatech_email','nexatech_usuario','nexatech_perfil','nexatech_sesion'].forEach(k=>{try{localStorage.removeItem(k)}catch(e){}})}
+  function actividad(){window.nexaFinal.lastActivity=Date.now()}
+  ['click','keydown','mousemove','touchstart','scroll'].forEach(e=>document.addEventListener(e,actividad,{passive:true}));
+  setInterval(()=>{if(nexaSesion?.activa&&Date.now()-nexaFinal.lastActivity>nexaFinal.idleMs){alert('Sesión cerrada por inactividad.');cerrarSesion()}},30000);
+  function seguridadLogin(){
+    const f=$id('loginForm');if(!f)return;
+    f.addEventListener('submit',e=>{if(Date.now()<nexaFinal.lockedUntil){e.preventDefault();e.stopImmediatePropagation();const s=Math.ceil((nexaFinal.lockedUntil-Date.now())/1000);alert('Demasiados intentos. Esperá '+s+' segundos.');return}},true);
+    const err=$id('loginError');if(err){new MutationObserver(()=>{if(err.textContent.trim()){nexaFinal.failures++;if(nexaFinal.failures>=5){nexaFinal.lockedUntil=Date.now()+5*60*1000;nexaFinal.failures=0}}}).observe(err,{childList:true,subtree:true,characterData:true})}
+    f.addEventListener('submit',()=>setTimeout(()=>{if(nexaSesion?.activa)nexaFinal.failures=0},2500));
+  }
+  function integridad(){
+    window.nexaIntegridad={ok:true,fallos:[]};['guardar','actualizar','cerrarSesion','mostrarApp'].forEach(fn=>{if(typeof window[fn]!=='function'){nexaIntegridad.ok=false;nexaIntegridad.fallos.push(fn)}});
+    if(typeof pcs==='undefined'||typeof reparaciones==='undefined')nexaIntegridad.ok=false;
+  }
+  function registerPWA(){if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}}
+  document.addEventListener('DOMContentLoaded',()=>{if(localStorage.getItem(KEY)==='light')document.body.classList.add('nexa-light');addUI();seguridadLogin();integridad();registerPWA();setInterval(()=>{limpiarCred();},60000);});
+})();
+</script>
+
 </body>
 </html>
-
-// Panel NexaTech: actualización periódica.
-document.addEventListener("DOMContentLoaded",()=>{setTimeout(actualizarPanelNexa,200);});
-setInterval(actualizarPanelNexa,5000);
