@@ -1418,13 +1418,10 @@ main.content {
                     <input
                         type="text"
                         id="email"
-                        placeholder="usuario@utu.edu.uy"
+                        placeholder="correo institucional o C.I."
                         autocomplete="off"
                         required
                     >
-                </div>
-                <div id="loginCredentialHint" style="color:var(--text-muted);font-size:12px;margin-top:6px">
-                    Administradores: solo @utu.edu.uy · Profesores: @utu.edu.uy o C.I.
                 </div>
 
             </div>
@@ -1518,7 +1515,7 @@ main.content {
 
         <div class="login-warning">
             Profesores: usar una cuenta registrada con correo institucional <strong>@utu.edu.uy</strong>.<br>
-            Administradores: solo pueden ingresar las cuentas registradas por un administrador.
+            Administradores: usar una cuenta @nexatech.local.
         </div>
 
     </div>
@@ -2637,11 +2634,11 @@ let profesores = JSON.parse(localStorage.getItem("nexatech_profesores")) || [
 // una lista vacía guardada de una versión anterior.
 let administradores = JSON.parse(localStorage.getItem("nexatech_administradores")) || [];
 if (!Array.isArray(administradores)) administradores = [];
-if (!administradores.some(a => String(a.email || "").trim().toLowerCase() === "admin@utu.edu.uy")) {
+if (!administradores.some(a => String(a.email || "").trim().toLowerCase() === "admin@nexatech.local")) {
     administradores.unshift({
         id: Date.now(),
         nombre: "Administrador principal",
-        email: "admin@utu.edu.uy",
+        email: "admin@nexatech.local",
         password: "NexaAdmin2026"
     });
 }
@@ -2649,7 +2646,7 @@ if (!administradores.some(a => String(a.email || "").trim().toLowerCase() === "a
 // (se quita la versión anterior con email "admin" si quedó guardada en el navegador)
 administradores = administradores.filter(a => String(a.email || "").trim().toLowerCase() !== "admin");
 
-administradores = administradores.filter(a => String(a.email || "").toLowerCase().endsWith("@utu.edu.uy"));
+administradores = administradores.filter(a => String(a.email || "").toLowerCase().endsWith("@nexatech.local"));
 
 if (!Array.isArray(profesores)) profesores = [];
 profesores.forEach(p => {
@@ -2790,8 +2787,8 @@ document
     let emailCuenta = "";
 
     if (tipoUsuario === "Administrador") {
-        if (!identificador.endsWith("@utu.edu.uy")) {
-            error.textContent = "El administrador debe ingresar un correo institucional @utu.edu.uy.";
+        if (!identificador.endsWith("@nexatech.local")) {
+            error.textContent = "El administrador debe ingresar un correo @nexatech.local.";
             error.style.display = "block";
             return;
         }
@@ -2843,7 +2840,7 @@ document
 
     error.textContent = tipoUsuario === "Profesor"
         ? "Profesor no registrado o contraseña incorrecta."
-        : "Administrador no registrado o contraseña incorrecta. Usá una cuenta @utu.edu.uy.";
+        : "Administrador no registrado o contraseña incorrecta. Usá una cuenta @nexatech.local.";
     error.style.display = "block";
 });
 
@@ -2855,7 +2852,11 @@ function mostrarApp() {
 
     const perfilValidado = perfilActualNexa();
     const emailSesion = String(nexaSesion.email || "").toLowerCase();
-    if ((perfilValidado === "Administrador" || perfilValidado === "Profesor") && !emailSesion.endsWith("@utu.edu.uy")) {
+    if (perfilValidado === "Administrador" && !emailSesion.endsWith("@nexatech.local")) {
+        cerrarSesion();
+        return;
+    }
+    if (perfilValidado === "Profesor" && !emailSesion.endsWith("@utu.edu.uy")) {
         cerrarSesion();
         return;
     }
@@ -2963,6 +2964,43 @@ function iniciarSegundoPasoQR() {
 }
 
 /* =====================================================
+   MOTOR QR ROBUSTO
+   Mantiene visibles y funcionales los QR de login y de PCs.
+===================================================== */
+async function asegurarLibreriaQRNexa(){
+    if (typeof window.QRCode !== "undefined") return true;
+    const fuentes = [
+        "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js",
+        "https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"
+    ];
+    for (const src of fuentes) {
+        try {
+            await new Promise((resolve,reject)=>{
+                const old=document.querySelector('script[data-nexa-qr-loader="1"]');
+                if(old) old.remove();
+                const script=document.createElement("script");
+                script.src=src;
+                script.async=true;
+                script.dataset.nexaQrLoader="1";
+                script.onload=()=>resolve();
+                script.onerror=()=>reject(new Error("No se pudo cargar QR"));
+                document.head.appendChild(script);
+            });
+            if(typeof window.QRCode !== "undefined") return true;
+        } catch(e) {}
+    }
+    return false;
+}
+
+async function crearQRCodeNexa(contenedor, opciones){
+    if(!contenedor) throw new Error("Contenedor QR no encontrado.");
+    contenedor.innerHTML="";
+    const disponible=await asegurarLibreriaQRNexa();
+    if(!disponible) throw new Error("No se pudo cargar el generador QR. Revisá la conexión a Internet.");
+    return new window.QRCode(contenedor, opciones);
+}
+
+/* =====================================================
    QR DE LOGIN
 ===================================================== */
 
@@ -3018,11 +3056,11 @@ async function mostrarQR(esSegundoPaso = false) {
         const loginUrl = new URL("https://brunozebastian32-cmyk.github.io/nexatech-soporte/");
         loginUrl.searchParams.set("login_token", token);
 
-        new QRCode(qrContainer, {
+        await crearQRCodeNexa(qrContainer, {
             text: loginUrl.toString(),
             width: 220,
             height: 220,
-            correctLevel: QRCode.CorrectLevel.H
+            correctLevel: window.QRCode.CorrectLevel.H
         });
 
         codigo.textContent = esSegundoPaso
@@ -4171,15 +4209,14 @@ function mostrarQRPC(id) {
 
     const urlEnlaceDirecto = new URL(window.location.pathname, window.location.origin).href + "?pc_token=" + encodeURIComponent(token);
 
-    new QRCode(
-        contenedor,
-        {
-            text: urlEnlaceDirecto,
-            width: 200,
-            height: 200,
-            correctLevel: QRCode.CorrectLevel.H
-        }
-    );
+    crearQRCodeNexa(contenedor, {
+        text: urlEnlaceDirecto,
+        width: 200,
+        height: 200,
+        correctLevel: window.QRCode.CorrectLevel.H
+    }).catch(err=>{
+        contenedor.innerHTML='<div style="padding:18px;color:#b00020;font-size:13px">'+escapeHTML(err.message||String(err))+'</div>';
+    });
 
     document
     .getElementById("pcQrModal")
@@ -4347,14 +4384,25 @@ function imprimirQRPC() {
 
     setTimeout(function() {
 
-        new ventana.QRCode(
-            ventana.document.getElementById("qr"),
-            {
-                text: urlEnlaceDirecto,
-                width: 250,
-                height: 250
-            }
-        );
+        if (typeof ventana.QRCode === "function") {
+            new ventana.QRCode(
+                ventana.document.getElementById("qr"),
+                {
+                    text: urlEnlaceDirecto,
+                    width: 250,
+                    height: 250
+                }
+            );
+        } else {
+            const qrScript = ventana.document.createElement("script");
+            qrScript.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+            qrScript.onload = function(){
+                new ventana.QRCode(ventana.document.getElementById("qr"), {text:urlEnlaceDirecto,width:250,height:250});
+                setTimeout(()=>ventana.print(),500);
+            };
+            ventana.document.head.appendChild(qrScript);
+            return;
+        }
 
         setTimeout(function() {
 
@@ -5071,8 +5119,8 @@ function agregarAdministrador(event) {
         alert("Completá todos los campos. La contraseña debe tener al menos 8 caracteres.");
         return;
     }
-    if (!email.endsWith("@utu.edu.uy")) {
-        alert("El correo del administrador debe terminar en @utu.edu.uy.");
+    if (!email.endsWith("@nexatech.local")) {
+        alert("El correo del administrador debe terminar en @nexatech.local.");
         return;
     }
     if (administradores.some(a => String(a.email || "").toLowerCase() === email)) {
@@ -6142,6 +6190,14 @@ function escapeHTML(text) {
     iniciarSincronizacionNexa();
     document.getElementById("app").style.display = "none";
     document.getElementById("loginPage").style.display = "flex";
+    const qrBtnInicio = document.querySelector(".login-box .qr-button");
+    const qrPanelInicio = document.getElementById("qrPanel");
+    const loginFormInicio = document.getElementById("loginForm");
+    const separatorInicio = document.querySelector(".separator");
+    if (qrBtnInicio) qrBtnInicio.style.display = "flex";
+    if (qrPanelInicio) qrPanelInicio.style.display = "none";
+    if (loginFormInicio) loginFormInicio.style.display = "block";
+    if (separatorInicio) separatorInicio.style.display = "flex";
 
 })();
 
