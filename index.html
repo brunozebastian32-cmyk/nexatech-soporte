@@ -2881,12 +2881,12 @@ function aplicarLimitesCaracteresNexa(){
     });
 }
 
-// La web/EXE conserva login normal + QR. OTP solo se habilita en móviles.
-// La APK Android añade NexaTechAndroid/1.0 al User-Agent; iOS puede añadir NexaTechIOS/1.0.
+// Login normal en todos los dispositivos. Se desactiva el segundo factor OTP móvil.
+// El QR se conserva únicamente como alternativa en PC/web/EXE.
 const NEXA_USER_AGENT = navigator.userAgent || "";
-const NEXA_MOBILE_OTP = /NexaTechAndroid\/1\.0|NexaTechIOS\/1\.0/i.test(NEXA_USER_AGENT)
-    || /Android|iPhone|iPad|iPod/i.test(NEXA_USER_AGENT);
-const NEXA_DESKTOP_QR_ONLY = !NEXA_MOBILE_OTP;
+const NEXA_IS_MOBILE = /NexaTechAndroid\/1\.0|NexaTechIOS\/1\.0|Android|iPhone|iPad|iPod/i.test(NEXA_USER_AGENT);
+const NEXA_MOBILE_OTP = false;
+const NEXA_DESKTOP_QR_ONLY = !NEXA_IS_MOBILE;
 
 function configurarModoLoginNexa(){
     const form=document.getElementById("loginForm");
@@ -2897,7 +2897,7 @@ function configurarModoLoginNexa(){
     // Nunca ocultar el login normal en PC/web/EXE.
     if(form) form.style.display="block";
     if(otp) otp.style.display="none";
-    if(NEXA_MOBILE_OTP){
+    if(NEXA_IS_MOBILE){
         if(separator) separator.style.display="none";
         if(qrBtn) qrBtn.style.display="none";
         if(warning) warning.style.display="none";
@@ -3367,7 +3367,7 @@ async function revisarSolicitudQR(token) {
             if (window.__nexa_2fa_pending) {
                 window.__nexa_2fa_pending = null;
                 const f=document.getElementById("loginForm"); const sep=document.querySelector(".separator"); const qb=document.querySelector(".login-box .qr-button");
-                if(f)f.style.display="block"; if(sep)sep.style.display=NEXA_MOBILE_OTP?"none":"flex"; if(qb)qb.style.display=NEXA_MOBILE_OTP?"none":"flex";
+                if(f)f.style.display="block"; if(sep)sep.style.display=NEXA_IS_MOBILE?"none":"flex"; if(qb)qb.style.display=NEXA_IS_MOBILE?"none":"flex";
             }
         }
 
