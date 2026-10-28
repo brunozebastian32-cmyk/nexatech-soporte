@@ -1063,6 +1063,9 @@ main.content {
 @media print {
     main.content { margin-top: 0; }
 }
+
+/* ===== NexaTech: panel profesional + móvil ===== */
+.nexa-dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}.nexa-stat{background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.025));border:1px solid var(--border);border-radius:14px;padding:16px;min-height:92px}.nexa-stat .num{font-size:28px;font-weight:800;line-height:1.1;margin-top:8px}.nexa-stat .lbl{color:var(--text-muted);font-size:13px}.nexa-alert{border:1px solid rgba(255,80,80,.25);background:rgba(180,20,20,.08);border-radius:10px;padding:10px 12px;margin:8px 0}.nexa-alert.ok{border-color:rgba(60,200,120,.25);background:rgba(60,200,120,.07)}.nexa-audit{display:grid;gap:8px;max-height:360px;overflow:auto}.nexa-audit-item{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.025)}.nexa-audit-item small{color:var(--text-muted);display:block;margin-top:4px}.nexa-trash-item{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:8px 0}@media(max-width:900px){.nexa-dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.nexa-dashboard-grid{grid-template-columns:1fr}.nexa-stat .num{font-size:24px}.nexa-trash-item{align-items:flex-start;flex-direction:column}.nexa-trash-item .button{width:100%}.panel,.card{padding:14px!important}.menu{gap:6px}.menu button{font-size:12px;padding:9px 10px}.barra-panel-inner{padding-left:8px;padding-right:8px}}
 </style>
 
 
@@ -1573,6 +1576,11 @@ main.content {
                 class="activo"
                 onclick="mostrarSeccion('inicio', this)">
                 Inicio
+            </button>
+
+            <button
+                onclick="mostrarSeccion('panelNexa', this)">
+                Panel
             </button>
 
             <button
@@ -2386,6 +2394,31 @@ main.content {
 
 
         <!-- =================================================
+             PANEL DE CONTROL NEXATECH
+        ================================================== -->
+        <section id="panelNexa" class="section">
+            <div class="panel">
+                <h2>Panel de control</h2>
+                <p style="color:var(--text-muted);margin:6px 0 0">Resumen rápido del estado del sistema.</p>
+                <div class="nexa-dashboard-grid">
+                    <div class="nexa-stat"><div class="lbl">Computadoras</div><div class="num" id="nexaStatPC">0</div></div>
+                    <div class="nexa-stat"><div class="lbl">En reparación</div><div class="num" id="nexaStatRepair">0</div></div>
+                    <div class="nexa-stat"><div class="lbl">Salones</div><div class="num" id="nexaStatSalon">0</div></div>
+                    <div class="nexa-stat"><div class="lbl">Jornadas activas</div><div class="num" id="nexaStatCheckin">0</div></div>
+                </div>
+            </div>
+            <div class="panel"><h2>Avisos</h2><div id="nexaAlertas"></div></div>
+            <div class="panel">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><h2 style="margin:0">Historial de cambios</h2><p style="color:var(--text-muted);margin:5px 0 0">Registro de acciones realizadas en NexaTech.</p></div><button class="button button-secondary admin-only" type="button" onclick="limpiarAuditoriaNexa()">Limpiar historial</button></div>
+                <div id="nexaAuditoria" class="nexa-audit" style="margin-top:14px"></div>
+            </div>
+            <div class="panel admin-only">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><div><h2 style="margin:0">Papelera</h2><p style="color:var(--text-muted);margin:5px 0 0">Los elementos eliminados pueden restaurarse.</p></div><button class="button button-danger" type="button" onclick="vaciarPapeleraNexa()">Vaciar papelera</button></div>
+                <div id="nexaPapelera" style="margin-top:14px"></div>
+            </div>
+        </section>
+
+        <!-- =================================================
              DOCUMENTACIÓN
         ================================================== -->
 
@@ -2601,6 +2634,8 @@ let reparaciones = JSON.parse(localStorage.getItem("nexatech_reparaciones")) || 
 ];
 
 let checkins = JSON.parse(localStorage.getItem("nexatech_checkins")) || [];
+let auditoriaNexa = JSON.parse(localStorage.getItem("nexatech_auditoria")) || [];
+let papeleraNexa = JSON.parse(localStorage.getItem("nexatech_papelera")) || [];
 
 let tecnicos = JSON.parse(localStorage.getItem("nexatech_tecnicos")) || [
     { id: 1, nombre: "Bruno Antúnez", telefono: "099123456" }
@@ -2646,6 +2681,8 @@ localStorage.setItem("nexatech_pcs", JSON.stringify(pcs));
 localStorage.setItem("nexatech_switches", JSON.stringify(switches));
 localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
 localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
+localStorage.setItem("nexatech_auditoria", JSON.stringify(auditoriaNexa));
+localStorage.setItem("nexatech_papelera", JSON.stringify(papeleraNexa));
 localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
 localStorage.setItem("nexatech_profesores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(profesores)));
 localStorage.setItem("nexatech_administradores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(administradores)));
@@ -3367,6 +3404,8 @@ function estadoNexa() {
         reparaciones,
         tecnicos,
         checkins,
+        auditoriaNexa,
+        papeleraNexa,
         profesores,
         administradores
     };
@@ -3380,6 +3419,8 @@ function aplicarEstadoRemoto(s) {
     if (Array.isArray(s.reparaciones)) reparaciones = s.reparaciones;
     if (Array.isArray(s.tecnicos)) tecnicos = s.tecnicos;
     if (Array.isArray(s.checkins)) checkins = s.checkins;
+    if (Array.isArray(s.auditoriaNexa)) auditoriaNexa = s.auditoriaNexa;
+    if (Array.isArray(s.papeleraNexa)) papeleraNexa = s.papeleraNexa;
     if (Array.isArray(s.profesores)) profesores = s.profesores;
     if (Array.isArray(s.administradores)) administradores = s.administradores;
 
@@ -3389,6 +3430,8 @@ function aplicarEstadoRemoto(s) {
     localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
     localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
     localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
+    localStorage.setItem("nexatech_auditoria", JSON.stringify(auditoriaNexa));
+    localStorage.setItem("nexatech_papelera", JSON.stringify(papeleraNexa));
     localStorage.setItem("nexatech_profesores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(profesores)));
     localStorage.setItem("nexatech_administradores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(administradores)));
 }
@@ -3611,6 +3654,17 @@ async function abrirQRPublico(token) {
 
 
 /* =====================================================
+   HISTORIAL, AVISOS Y PAPELERA
+===================================================== */
+function identidadAuditoriaNexa(){return {nombre:String(nexaSesion?.usuario||localStorage.getItem("nexatech_usuario")||"Usuario"),email:String(nexaSesion?.email||"")};}
+function registrarAuditoriaNexa(accion,detalle){const u=identidadAuditoriaNexa();auditoriaNexa.unshift({id:Date.now()+Math.random(),accion:String(accion),detalle:String(detalle||""),nombre:u.nombre,email:u.email,fecha:new Date().toISOString()});auditoriaNexa=auditoriaNexa.slice(0,200);localStorage.setItem("nexatech_auditoria",JSON.stringify(auditoriaNexa));}
+function moverAPapeleraNexa(tipo,item){papeleraNexa.unshift({id:Date.now()+Math.random(),tipo,item:JSON.parse(JSON.stringify(item)),fecha:new Date().toISOString(),eliminadoPor:identidadAuditoriaNexa()});papeleraNexa=papeleraNexa.slice(0,200);registrarAuditoriaNexa("Eliminación",`${tipo}: ${item.nombre||item.problema||item.id}`);}
+function restaurarPapeleraNexa(id){if(!exigirAdministradorNexa())return;const idx=papeleraNexa.findIndex(x=>x.id===id);if(idx<0)return;const x=papeleraNexa[idx];const mapa={salon:salones,pc:pcs,switch:switches,reparacion:reparaciones,tecnico:tecnicos,profesor:profesores,administrador:administradores};if(x.tipo==='grupo'){const salon=salones.find(z=>z.id==x.item.salonId);if(!salon){alert("No se puede restaurar: el salón ya no existe.");return;}salon.grupos=salon.grupos||[];salon.grupos.push(x.item.grupo);}else if(mapa[x.tipo])mapa[x.tipo].push(x.item);else{alert("Tipo de elemento no reconocido.");return;}papeleraNexa.splice(idx,1);registrarAuditoriaNexa("Restauración",`${x.tipo}: ${x.item.nombre||x.item.problema||x.item.id}`);guardar();actualizar();}
+function vaciarPapeleraNexa(){if(!exigirAdministradorNexa())return;if(!papeleraNexa.length){alert("La papelera ya está vacía.");return;}if(!confirm("¿Vaciar toda la papelera? Esta acción no se puede deshacer."))return;papeleraNexa=[];registrarAuditoriaNexa("Papelera vaciada","Se eliminaron definitivamente los elementos de la papelera.");guardar();actualizar();}
+function limpiarAuditoriaNexa(){if(!exigirAdministradorNexa())return;if(!confirm("¿Limpiar el historial de cambios?"))return;auditoriaNexa=[];guardar();actualizar();}
+function actualizarPanelNexa(){const el=id=>document.getElementById(id);if(!el("nexaStatPC"))return;el("nexaStatPC").textContent=pcs.length;el("nexaStatRepair").textContent=pcs.filter(p=>String(p.estado).toLowerCase().includes("repar")).length;el("nexaStatSalon").textContent=salones.length;el("nexaStatCheckin").textContent=checkins.filter(c=>c.checkin&&!c.checkout).length;const avisos=[];const rep=pcs.filter(p=>String(p.estado).toLowerCase().includes("repar"));if(rep.length)avisos.push(`<div class="nexa-alert">⚠️ Hay <strong>${rep.length}</strong> PC(s) en reparación.</div>`);const pendientes=reparaciones.filter(r=>String(r.estado).toLowerCase().includes("pendiente"));if(pendientes.length)avisos.push(`<div class="nexa-alert">🛠️ Hay <strong>${pendientes.length}</strong> reparación(es) pendientes.</div>`);const activas=checkins.filter(c=>c.checkin&&!c.checkout).length;if(activas)avisos.push(`<div class="nexa-alert">🕐 Hay <strong>${activas}</strong> jornada(s) activa(s).</div>`);if(!avisos.length)avisos.push(`<div class="nexa-alert ok">✓ No hay avisos importantes en este momento.</div>`);el("nexaAlertas").innerHTML=avisos.join("");const aud=el("nexaAuditoria");aud.innerHTML=auditoriaNexa.length?auditoriaNexa.slice(0,100).map(a=>`<div class="nexa-audit-item"><strong>${escapeHTML(a.accion)}</strong><div>${escapeHTML(a.detalle||"")}</div><small>${escapeHTML(a.nombre||"Usuario")} · ${escapeHTML(a.email||"")} · ${new Date(a.fecha).toLocaleString()}</small></div>`).join(""):"<div class='item-info'>Todavía no hay cambios registrados.</div>";const pap=el("nexaPapelera");pap.innerHTML=papeleraNexa.length?papeleraNexa.map(x=>`<div class="nexa-trash-item"><div><strong>${escapeHTML(x.tipo)}</strong><div class="item-info">${escapeHTML(x.item?.nombre||x.item?.problema||String(x.item?.id||"Elemento"))}</div><small>${new Date(x.fecha).toLocaleString()}</small></div><button class="button" onclick="restaurarPapeleraNexa(${x.id})">Restaurar</button></div>`).join(""):"<div class='item-info'>La papelera está vacía.</div>";}
+
+/* =====================================================
    GUARDAR
 ===================================================== */
 
@@ -3621,6 +3675,8 @@ function guardar() {
     localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
     localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
     localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
+    localStorage.setItem("nexatech_auditoria", JSON.stringify(auditoriaNexa));
+    localStorage.setItem("nexatech_papelera", JSON.stringify(papeleraNexa));
     localStorage.setItem("nexatech_profesores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(profesores)));
     localStorage.setItem("nexatech_administradores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(administradores)));
 
@@ -3682,11 +3738,9 @@ function eliminarSalon(id) {
         return;
     }
 
-    salones =
-        salones.filter(
-            salon =>
-                salon.id !== id
-        );
+    const eliminadoSalon = salones.find(salon => salon.id === id);
+    if (eliminadoSalon) moverAPapeleraNexa("salon", eliminadoSalon);
+    salones = salones.filter(salon => salon.id !== id);
 
     guardar();
 
@@ -3959,11 +4013,9 @@ function eliminarPC(id) {
         return;
     }
 
-    pcs =
-        pcs.filter(
-            pc =>
-                pc.id !== id
-        );
+    const eliminadoPC = pcs.find(pc => pc.id === id);
+    if (eliminadoPC) moverAPapeleraNexa("pc", eliminadoPC);
+    pcs = pcs.filter(pc => pc.id !== id);
 
     guardar();
 
@@ -4337,11 +4389,9 @@ function eliminarSwitch(id) {
         return;
     }
 
-    switches =
-        switches.filter(
-            sw =>
-                sw.id !== id
-        );
+    const eliminadoSwitch = switches.find(sw => sw.id === id);
+    if (eliminadoSwitch) moverAPapeleraNexa("switch", eliminadoSwitch);
+    switches = switches.filter(sw => sw.id !== id);
 
     guardar();
 
@@ -4419,11 +4469,9 @@ function eliminarReparacion(id) {
         return;
     }
 
-    reparaciones =
-        reparaciones.filter(
-            reparacion =>
-                reparacion.id !== id
-        );
+    const eliminada = reparaciones.find(reparacion => reparacion.id === id);
+    if (eliminada) moverAPapeleraNexa("reparacion", eliminada);
+    reparaciones = reparaciones.filter(reparacion => reparacion.id !== id);
 
     guardar();
 
@@ -4491,11 +4539,9 @@ function eliminarTecnico(id) {
         return;
     }
 
-    tecnicos =
-        tecnicos.filter(
-            tecnico =>
-                tecnico.id !== id
-        );
+    const eliminadoTecnico = tecnicos.find(tecnico => tecnico.id === id);
+    if (eliminadoTecnico) moverAPapeleraNexa("tecnico", eliminadoTecnico);
+    tecnicos = tecnicos.filter(tecnico => tecnico.id !== id);
 
     guardar();
 
@@ -5006,6 +5052,8 @@ function eliminarAdministrador(id) {
         return;
     }
     if (!confirm("¿Seguro que querés eliminar este administrador?")) return;
+    const eliminadoAdmin = administradores.find(a => a.id === id);
+    if (eliminadoAdmin) moverAPapeleraNexa("administrador", {id:eliminadoAdmin.id,nombre:eliminadoAdmin.nombre,email:eliminadoAdmin.email});
     administradores = administradores.filter(a => a.id !== id);
     guardar();
     mostrarAdministradores();
@@ -5100,9 +5148,9 @@ function eliminarProfesor(id) {
         return;
     }
 
-    profesores = profesores.filter(function(profesor) {
-        return profesor.id !== id;
-    });
+    const eliminadoProfesor = profesores.find(profesor => profesor.id === id);
+    if (eliminadoProfesor) moverAPapeleraNexa("profesor", quitarCredencialesDeCacheLocalNexa([eliminadoProfesor])[0] || eliminadoProfesor);
+    profesores = profesores.filter(function(profesor) { return profesor.id !== id; });
 
     guardar();
     mostrarProfesores();
@@ -5226,6 +5274,7 @@ function mostrarTecnicos() {
 ===================================================== */
 
 function actualizar() {
+    actualizarPanelNexa();
 
     actualizarSelects();
 
@@ -6354,3 +6403,7 @@ function toggleBarraSuperior(abrir) {
 
 </body>
 </html>
+
+// Panel NexaTech: actualización periódica.
+document.addEventListener("DOMContentLoaded",()=>{setTimeout(actualizarPanelNexa,200);});
+setInterval(actualizarPanelNexa,5000);
