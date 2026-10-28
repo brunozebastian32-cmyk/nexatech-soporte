@@ -1591,6 +1591,16 @@ main.content {
             </button>
 
             <button
+                onclick="mostrarSeccion('checkin', this)">
+                Check-in / Check-out
+            </button>
+
+            <button
+                onclick="mostrarSeccion('herramientas', this)">
+                Herramientas
+            </button>
+
+            <button
                 class="admin-only"
                 onclick="mostrarSeccion('switches', this)">
                 Switches
@@ -1976,8 +1986,84 @@ main.content {
 
             </div>
 
+            <div class="panel">
+                <h2>Mapa 3D de computadoras</h2>
+                <p style="color:var(--text-muted);line-height:1.5;margin-bottom:12px">
+                    Arrastrá cada PC para colocarla en la posición real del salón. La posición queda guardada y se comparte con Supabase.
+                </p>
+                <div class="nexa-map-toolbar">
+                    <select id="mapSalonSelect" onchange="renderMapa3DNexa()"></select>
+                    <button class="button button-secondary" onclick="centrarMapaNexa()">Recentrar</button>
+                </div>
+                <div id="mapa3D" class="nexa-map-wrap">
+                    <div class="nexa-map-stage">
+                        <div class="nexa-map-floor"></div>
+                        <div class="nexa-map-wall w1"></div>
+                        <div class="nexa-map-wall w2"></div>
+                        <div id="mapaPCs"></div>
+                    </div>
+                </div>
+                <div class="nexa-map-help">Modo edición: solo administrador. Arrastrá las PCs; la posición se guarda automáticamente.</div>
+            </div>
+
         </section>
 
+
+
+        <!-- =================================================
+             CHECK-IN / CHECK-OUT
+        ================================================== -->
+        <section id="checkin" class="section">
+            <div class="panel">
+                <h2>Control de asistencia y uso</h2>
+                <p style="color:var(--text-muted);line-height:1.5;margin-bottom:18px">
+                    Registrá la entrada y salida del usuario que inició sesión. Cada movimiento guarda fecha, hora, perfil, email y PC utilizada.
+                </p>
+                <div class="nexa-checkin-wrap">
+                    <div class="nexa-check-card">
+                        <h3>Mi jornada</h3>
+                        <div id="checkinEstado" class="nexa-check-status">Cargando estado…</div>
+                        <div class="field">
+                            <label for="checkinPC">PC utilizada</label>
+                            <select id="checkinPC"><option value="">Sin especificar</option></select>
+                        </div>
+                        <div class="nexa-check-actions">
+                            <button class="button button-success" onclick="registrarCheckin()">Registrar check-in</button>
+                            <button class="button button-danger" onclick="registrarCheckout()">Registrar check-out</button>
+                        </div>
+                    </div>
+                    <div class="nexa-check-card">
+                        <h3>Últimos movimientos</h3>
+                        <div id="checkinHistorial"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="panel admin-only">
+                <h2>Registro general</h2>
+                <div id="checkinAdminHistorial"></div>
+            </div>
+        </section>
+
+        <!-- =================================================
+             HERRAMIENTAS
+        ================================================== -->
+        <section id="herramientas" class="section">
+            <div class="panel">
+                <h2>Herramientas de validación</h2>
+                <p style="color:var(--text-muted);line-height:1.5;margin-bottom:18px">Validación local de C.I. uruguaya y generación de números de prueba.</p>
+                <div class="form">
+                    <div class="field">
+                        <label for="ciValidar">Cédula uruguaya</label>
+                        <input id="ciValidar" type="text" inputmode="numeric" placeholder="Ej: 20050766">
+                    </div>
+                    <div class="nexa-check-actions">
+                        <button class="button" onclick="validarCINexa()">Validar C.I.</button>
+                        <button class="button button-secondary" onclick="generarCINexa()">Generar C.I. de prueba</button>
+                    </div>
+                    <div id="ciResultado" class="nexa-check-status"></div>
+                </div>
+            </div>
+        </section>
 
         <!-- =================================================
              SWITCHES (ADMIN ONLY)
@@ -2514,8 +2600,8 @@ let salones = JSON.parse(localStorage.getItem("nexatech_salones")) || [
 ];
 
 let pcs = JSON.parse(localStorage.getItem("nexatech_pcs")) || [
-    { id: 1, nombre: "PC-01", salon: 101, estado: "Funcionando", qrToken: "NEXATECH-PC01-8812", fechaRegistro: "01/09/2026" },
-    { id: 2, nombre: "PC-02", salon: 101, estado: "En reparación", qrToken: "NEXATECH-PC02-9913", fechaRegistro: "02/09/2026" }
+    { id: 1, nombre: "PC-01", salon: 101, estado: "Funcionando", qrToken: "NEXATECH-PC01-8812", fechaRegistro: "01/09/2026", mapa:{x:18,y:20,z:0} },
+    { id: 2, nombre: "PC-02", salon: 101, estado: "En reparación", qrToken: "NEXATECH-PC02-9913", fechaRegistro: "02/09/2026", mapa:{x:48,y:20,z:0} }
 ];
 
 let switches = JSON.parse(localStorage.getItem("nexatech_switches")) || [
@@ -2525,6 +2611,8 @@ let switches = JSON.parse(localStorage.getItem("nexatech_switches")) || [
 let reparaciones = JSON.parse(localStorage.getItem("nexatech_reparaciones")) || [
     { id: 1, pc: 2, problema: "Falla de encendido en la fuente", estado: "En reparación", fecha: "05/09/2026" }
 ];
+
+let checkins = JSON.parse(localStorage.getItem("nexatech_checkins")) || [];
 
 let tecnicos = JSON.parse(localStorage.getItem("nexatech_tecnicos")) || [
     { id: 1, nombre: "Bruno Antúnez", telefono: "099123456" }
@@ -2572,9 +2660,15 @@ localStorage.setItem("nexatech_salones", JSON.stringify(salones));
 localStorage.setItem("nexatech_pcs", JSON.stringify(pcs));
 localStorage.setItem("nexatech_switches", JSON.stringify(switches));
 localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
+localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
 localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
 localStorage.setItem("nexatech_profesores", JSON.stringify(profesores));
 localStorage.setItem("nexatech_administradores", JSON.stringify(administradores));
+
+pcs.forEach((pc, i) => {
+    if (!pc.mapa) pc.mapa = { x: 15 + ((i * 23) % 70), y: 20 + ((i * 17) % 65), z: 0 };
+});
+localStorage.setItem("nexatech_pcs", JSON.stringify(pcs));
 
 
 /* =====================================================
@@ -2662,12 +2756,11 @@ document
     }
 
     if (acceso) {
-        localStorage.setItem("nexatech_sesion", "true");
-        localStorage.setItem("nexatech_usuario", nombreUsuario);
-        localStorage.setItem("nexatech_email", email);
-        localStorage.setItem("nexatech_perfil", tipoUsuario);
         error.style.display = "none";
-        mostrarApp();
+        // Segundo paso: autorización mediante QR en el celular.
+        // La sesión NO se crea hasta que Supabase confirme el segundo factor.
+        window.__nexa_2fa_pending = { email, tipoUsuario, nombreUsuario };
+        iniciarSegundoPasoQR();
         return;
     }
 
@@ -2772,14 +2865,44 @@ function cerrarSesion() {
     .getElementById("password")
     .value = "";
 
+    const emailInput = document.getElementById("email");
+    if (emailInput) {
+        emailInput.value = "";
+        emailInput.removeAttribute("value");
+    }
+    const qrPanel = document.getElementById("qrPanel");
+    if (qrPanel) qrPanel.style.display = "none";
+    window.__nexa_2fa_pending = null;
+
 }
 
+
+/* =====================================================
+   SEGUNDO PASO DE VALIDACIÓN (2FA)
+===================================================== */
+function iniciarSegundoPasoQR() {
+    const pending = window.__nexa_2fa_pending;
+    if (!pending) return;
+    const panel = document.getElementById("qrPanel");
+    const codigo = document.getElementById("qrCodigo");
+    const qrContainer = document.getElementById("qrCode");
+    const form = document.getElementById("loginForm");
+    const separator = document.querySelector(".separator");
+    const qrButton = document.querySelector(".login-box .qr-button");
+    panel.style.display = "block";
+    form.style.display = "none";
+    if (separator) separator.style.display = "none";
+    if (qrButton) qrButton.style.display = "none";
+    codigo.textContent = "Segundo paso: generando autorización…";
+    qrContainer.innerHTML = "";
+    mostrarQR(true);
+}
 
 /* =====================================================
    QR DE LOGIN
 ===================================================== */
 
-async function mostrarQR() {
+async function mostrarQR(esSegundoPaso = false) {
 
     const panel = document.getElementById("qrPanel");
     const qrContainer = document.getElementById("qrCode");
@@ -2838,7 +2961,9 @@ async function mostrarQR() {
             correctLevel: QRCode.CorrectLevel.H
         });
 
-        codigo.textContent = "Escaneá este QR con el celular para autorizar el acceso. Válido durante 5 minutos.";
+        codigo.textContent = esSegundoPaso
+            ? "Segundo paso: escaneá este QR con el celular para confirmar tu identidad. Válido durante 5 minutos."
+            : "Escaneá este QR con el celular para autorizar el acceso. Válido durante 5 minutos.";
         localStorage.setItem("nexatech_qr_actual", token);
 
         // La PC pregunta periódicamente si el celular ya autorizó.
@@ -2880,11 +3005,13 @@ async function revisarSolicitudQR(token) {
         }
 
         if (solicitud.status === "approved") {
+            const pending2fa = window.__nexa_2fa_pending;
             localStorage.setItem("nexatech_sesion", "true");
-            localStorage.setItem("nexatech_usuario", solicitud.email);
-            localStorage.setItem("nexatech_email", String(solicitud.email || "").toLowerCase());
-            localStorage.setItem("nexatech_perfil", solicitud.role);
+            localStorage.setItem("nexatech_usuario", pending2fa?.nombreUsuario || solicitud.email);
+            localStorage.setItem("nexatech_email", String(pending2fa?.email || solicitud.email || "").toLowerCase());
+            localStorage.setItem("nexatech_perfil", pending2fa?.tipoUsuario || solicitud.role);
             localStorage.removeItem("nexatech_qr_actual");
+            window.__nexa_2fa_pending = null;
 
             document.getElementById("qrCodigo").textContent = "Acceso autorizado. Iniciando sesión…";
             window.history.replaceState({}, document.title, window.location.pathname);
@@ -2898,6 +3025,11 @@ async function revisarSolicitudQR(token) {
 
         if (solicitud.status === "expired" || solicitud.status === "used") {
             document.getElementById("qrCodigo").textContent = "Este QR venció o ya fue utilizado. Generá uno nuevo.";
+            if (window.__nexa_2fa_pending) {
+                window.__nexa_2fa_pending = null;
+                const f=document.getElementById("loginForm"); const sep=document.querySelector(".separator"); const qb=document.querySelector(".login-box .qr-button");
+                if(f)f.style.display=""; if(sep)sep.style.display=""; if(qb)qb.style.display="";
+            }
         }
 
     } catch (err) {
@@ -2908,11 +3040,16 @@ async function revisarSolicitudQR(token) {
 
 
 function ocultarQR() {
-
-    document
-    .getElementById("qrPanel")
-    .style.display = "none";
-
+    if (window.__nexa_qr_poll) { clearInterval(window.__nexa_qr_poll); window.__nexa_qr_poll = null; }
+    localStorage.removeItem("nexatech_qr_actual");
+    window.__nexa_2fa_pending = null;
+    document.getElementById("qrPanel").style.display = "none";
+    const form = document.getElementById("loginForm");
+    const separator = document.querySelector(".separator");
+    const qrButton = document.querySelector(".login-box .qr-button");
+    if (form) form.style.display = "";
+    if (separator) separator.style.display = "";
+    if (qrButton) qrButton.style.display = "";
 }
 
 
@@ -3091,6 +3228,10 @@ function mostrarSeccion(id, boton) {
 
         pcs: "Computadoras",
 
+        checkin: "Check-in / Check-out",
+
+        herramientas: "Herramientas de validación",
+
         switches: "Switches",
 
         reparaciones: "Reparaciones",
@@ -3136,7 +3277,8 @@ function estadoNexa() {
         pcs,
         switches,
         reparaciones,
-        tecnicos
+        tecnicos,
+        checkins
     };
 }
 
@@ -3162,12 +3304,14 @@ async function cargarDesdeSupabase() {
             switches = Array.isArray(s.switches) ? s.switches : switches;
             reparaciones = Array.isArray(s.reparaciones) ? s.reparaciones : reparaciones;
             tecnicos = Array.isArray(s.tecnicos) ? s.tecnicos : tecnicos;
+            checkins = Array.isArray(s.checkins) ? s.checkins : checkins;
 
             localStorage.setItem("nexatech_salones", JSON.stringify(salones));
             localStorage.setItem("nexatech_pcs", JSON.stringify(pcs));
             localStorage.setItem("nexatech_switches", JSON.stringify(switches));
             localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
             localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
+            localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
 
             actualizarEstadoSync("ok", "Supabase · sincronizado");
             return true;
@@ -3367,6 +3511,11 @@ function guardar() {
     );
 
     localStorage.setItem(
+        "nexatech_checkins",
+        JSON.stringify(checkins)
+    );
+
+    localStorage.setItem(
         "nexatech_profesores",
         JSON.stringify(profesores)
     );
@@ -3560,6 +3709,89 @@ function eliminarGrupo(salonId, grupoId) {
 }
 
 
+
+/* =====================================================
+   CHECK-IN / CHECK-OUT
+===================================================== */
+function identidadNexa() {
+    return {
+        email: String(localStorage.getItem("nexatech_email") || "").toLowerCase(),
+        nombre: localStorage.getItem("nexatech_usuario") || "Usuario",
+        perfil: localStorage.getItem("nexatech_perfil") || ""
+    };
+}
+function fechaDiaNexa(d=new Date()) { return d.toISOString().slice(0,10); }
+function horaNexa(d=new Date()) { return d.toLocaleTimeString("es-UY", {hour:"2-digit",minute:"2-digit",second:"2-digit"}); }
+function registrarCheckin() {
+    const u=identidadNexa(); if(!u.email){alert("No hay una sesión activa.");return;}
+    const hoy=fechaDiaNexa();
+    const abierto=checkins.find(x=>x.email===u.email&&x.fecha===hoy&&!x.checkout);
+    if(abierto){alert("Ya tenés un check-in abierto.");return;}
+    const pcId=document.getElementById("checkinPC")?.value || "";
+    checkins.push({id:Date.now(),email:u.email,nombre:u.nombre,perfil:u.perfil,fecha:hoy,checkin:new Date().toISOString(),checkout:"",pc:pcId?Number(pcId):null});
+    guardar(); actualizar(); alert("Check-in registrado a las "+horaNexa()+".");
+}
+function registrarCheckout() {
+    const u=identidadNexa(); if(!u.email){alert("No hay una sesión activa.");return;}
+    const hoy=fechaDiaNexa();
+    const abierto=checkins.find(x=>x.email===u.email&&x.fecha===hoy&&!x.checkout);
+    if(!abierto){alert("No hay un check-in abierto para cerrar.");return;}
+    abierto.checkout=new Date().toISOString();
+    guardar(); actualizar(); alert("Check-out registrado a las "+horaNexa()+".");
+}
+function actualizarCheckinNexa(){
+    const u=identidadNexa(), hoy=fechaDiaNexa();
+    const estado=document.getElementById("checkinEstado");
+    const hist=document.getElementById("checkinHistorial");
+    const adminHist=document.getElementById("checkinAdminHistorial");
+    if(!estado)return;
+    const abierto=checkins.find(x=>x.email===u.email&&x.fecha===hoy&&!x.checkout);
+    estado.innerHTML=abierto ? "Estado: <strong>EN JORNADA</strong> · entrada " + new Date(abierto.checkin).toLocaleTimeString("es-UY") : "Estado: <strong>FUERA</strong>";
+    const propios=checkins.filter(x=>x.email===u.email).slice(-12).reverse();
+    hist.innerHTML=propios.length?'<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>PC</th></tr></thead><tbody>'+propios.map(x=>{const pc=pcs.find(p=>p.id==x.pc);return `<tr><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td><td>${escapeHTML(pc?.nombre||"—")}</td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Todavía no hay movimientos.</div>';
+    if(esAdministradorNexa()&&adminHist){
+        const all=checkins.slice().sort((a,b)=>String(b.checkin).localeCompare(String(a.checkin))).slice(0,40);
+        adminHist.innerHTML=all.length?'<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Usuario</th><th>Perfil</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>PC</th></tr></thead><tbody>'+all.map(x=>{const pc=pcs.find(p=>p.id==x.pc);return `<tr><td>${escapeHTML(x.email)}</td><td>${escapeHTML(x.perfil)}</td><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td><td>${escapeHTML(pc?.nombre||"—")}</td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Sin movimientos.</div>';
+    }
+}
+function prepararSelectMapaNexa(){
+    const sel=document.getElementById("mapSalonSelect"); if(!sel)return;
+    const actual=sel.value || String(salones[0]?.id||"");
+    sel.innerHTML=salones.map(s=>`<option value="${s.id}">${escapeHTML(s.nombre)}</option>`).join("");
+    if(salones.some(s=>String(s.id)===actual))sel.value=actual;
+}
+function centrarMapaNexa(){
+    const lista=pcs.filter(p=>String(p.salon)===String(document.getElementById("mapSalonSelect")?.value));
+    lista.forEach((pc,i)=>{pc.mapa={x:15+(i%4)*22,y:20+Math.floor(i/4)*24,z:0};});
+    guardar();renderMapa3DNexa();
+}
+function claseMapaPC(pc){return pc.estado==="En reparación"?"repair":pc.estado==="Fuera de servicio"?"off":pc.estado==="Sin internet"?"net":""}
+function renderMapa3DNexa(){
+    const wrap=document.getElementById("mapaPCs"), sel=document.getElementById("mapSalonSelect"); if(!wrap||!sel)return;
+    const salonId=sel.value; wrap.innerHTML="";
+    pcs.filter(p=>String(p.salon)===String(salonId)).forEach(pc=>{
+        if(!pc.mapa)pc.mapa={x:10+Math.random()*70,y:10+Math.random()*70,z:0};
+        const el=document.createElement("div"); el.className="nexa-map-pc "+claseMapaPC(pc); el.dataset.id=pc.id; el.innerHTML=`<span class="pc-led"></span>${escapeHTML(pc.nombre)}`;
+        const draw=()=>{const scale=1+((Number(pc.mapa.z)||0)/100);el.style.left=pc.mapa.x+"%";el.style.top=pc.mapa.y+"%";el.style.transform=`translate(-50%,-50%) translateZ(${pc.mapa.z||0}px) scale(${scale})`;}; draw();
+        let drag=false,ox=0,oy=0;
+        el.addEventListener("pointerdown",e=>{if(!esAdministradorNexa())return;drag=true;ox=e.clientX;oy=e.clientY;el.setPointerCapture(e.pointerId);});
+        el.addEventListener("pointermove",e=>{if(!drag)return;const rect=document.getElementById("mapa3D").getBoundingClientRect();pc.mapa.x=Math.max(4,Math.min(96,pc.mapa.x+(e.clientX-ox)/rect.width*100));pc.mapa.y=Math.max(4,Math.min(96,pc.mapa.y+(e.clientY-oy)/rect.height*100));ox=e.clientX;oy=e.clientY;draw();});
+        el.addEventListener("pointerup",()=>{if(drag){drag=false;guardar();}});
+        el.addEventListener("wheel",e=>{if(!esAdministradorNexa())return;e.preventDefault();pc.mapa.z=Math.max(-20,Math.min(80,(Number(pc.mapa.z)||0)-(e.deltaY/10)));draw();guardar();},{passive:false});
+        wrap.appendChild(el);
+    });
+}
+
+/* =====================================================
+   C.I. URUGUAYA
+===================================================== */
+function clean_ci(ci){return String(ci||"").replace(/\D/g,"");}
+function validation_digit(ci){let a=0;let i=0;ci=String(ci||"");if(ci.length<=6){for(i=ci.length;i<7;i++)ci="0"+ci;}for(i=0;i<7;i++)a+=(parseInt("2987634"[i])*parseInt(ci[i]))%10;return a%10===0?0:10-a%10;}
+function validate_ci(ci){ci=clean_ci(ci);if(ci.length<7||ci.length>8)return false;const dig=ci[ci.length-1];ci=ci.replace(/[0-9]$/,'');return Number(dig)===validation_digit(ci);}
+function random_ci(){let ci=Math.floor(Math.random()*10000000).toString();ci=ci.substring(0,7)+validation_digit(ci);return ci;}
+function validarCINexa(){const v=clean_ci(document.getElementById("ciValidar")?.value);const out=document.getElementById("ciResultado");if(!out)return;if(validate_ci(v)){out.innerHTML='<span class="badge badge-funciona">C.I. válida</span>';}else{out.innerHTML='<span class="badge badge-fuera">C.I. no válida</span>';}}
+function generarCINexa(){const ci=random_ci();const input=document.getElementById("ciValidar"),out=document.getElementById("ciResultado");if(input)input.value=ci;if(out)out.innerHTML='<span class="badge badge-funciona">C.I. de prueba generada: '+ci+'</span>';}
+
 /* =====================================================
    PCS
 ===================================================== */
@@ -3607,7 +3839,9 @@ function agregarPC(event) {
 
         fechaRegistro:
             new Date()
-            .toLocaleDateString()
+            .toLocaleDateString(),
+
+        mapa: { x: 15 + ((pcs.length * 17) % 70), y: 18 + ((pcs.length * 11) % 65), z: 0 }
 
     });
 
@@ -3843,7 +4077,33 @@ function imprimirQRPC() {
                     line-height: 1.8;
                 }
 
-            </style>
+            
+/* ===== NexaTech: check-in/out + mapa 3D + seguridad ===== */
+.nexa-checkin-wrap{display:grid;grid-template-columns:1fr 1.5fr;gap:18px}
+.nexa-check-card{background:var(--bg-soft);border:1px solid var(--border);border-radius:14px;padding:20px}
+.nexa-check-status{font-size:15px;margin:10px 0 16px;color:var(--text-muted)}
+.nexa-check-status strong{color:#fff}
+.nexa-check-actions{display:flex;gap:10px;flex-wrap:wrap}
+.nexa-table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px}
+.nexa-table{width:100%;border-collapse:collapse;min-width:700px}
+.nexa-table th,.nexa-table td{padding:11px 12px;border-bottom:1px solid var(--border);text-align:left;font-size:13px}
+.nexa-table th{background:#17171b;color:#fff}
+.nexa-table tr:last-child td{border-bottom:0}
+.nexa-2fa-note{margin-top:12px;padding:10px 12px;border:1px solid rgba(139,0,0,.55);background:rgba(139,0,0,.12);border-radius:9px;color:var(--text-muted);font-size:12px;line-height:1.5}
+.nexa-map-wrap{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:16px;background:#070707;min-height:540px;perspective:1000px}
+.nexa-map-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.nexa-map-stage{position:absolute;inset:0;transform-style:preserve-3d;transform:rotateX(56deg) rotateZ(0deg) scale(.92);transform-origin:center center}
+.nexa-map-floor{position:absolute;left:8%;top:8%;width:84%;height:84%;border:2px solid rgba(255,255,255,.15);background:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 8%),repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 8%),linear-gradient(135deg,#17171b,#0d0d10);box-shadow:0 0 0 1px rgba(139,0,0,.18) inset,0 35px 80px rgba(0,0,0,.55);transform-style:preserve-3d}
+.nexa-map-wall{position:absolute;background:#1d1d22;border:1px solid #38383f;transform-origin:left bottom}
+.nexa-map-wall.w1{left:8%;top:8%;width:84%;height:18px;transform:translateZ(30px)}
+.nexa-map-wall.w2{left:8%;top:8%;width:18px;height:84%;transform:translateZ(30px)}
+.nexa-map-pc{position:absolute;width:76px;height:58px;border:1px solid rgba(255,255,255,.25);border-radius:10px;background:linear-gradient(145deg,#26262d,#0e0e11);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:11px;cursor:grab;user-select:none;box-shadow:0 12px 20px rgba(0,0,0,.55),0 0 0 2px rgba(139,0,0,.15);transform-style:preserve-3d}
+.nexa-map-pc:active{cursor:grabbing}
+.nexa-map-pc .pc-led{width:7px;height:7px;border-radius:50%;background:#2e7d32;box-shadow:0 0 8px rgba(46,125,50,.7);margin-bottom:5px}
+.nexa-map-pc.repair .pc-led{background:#b08000}.nexa-map-pc.off .pc-led{background:#b03030}.nexa-map-pc.net .pc-led{background:#0055a5}
+.nexa-map-help{color:var(--text-muted);font-size:12px;margin-top:9px}
+@media(max-width:850px){.nexa-checkin-wrap{grid-template-columns:1fr}.nexa-map-wrap{min-height:430px}.nexa-map-stage{transform:rotateX(56deg) scale(.78)}}
+</style>
 
         </head>
 
@@ -4866,6 +5126,9 @@ function actualizar() {
     mostrarGrupos();
 
     mostrarPCs();
+    actualizarCheckinNexa();
+    prepararSelectMapaNexa();
+    renderMapa3DNexa();
 
     mostrarSwitches();
 
