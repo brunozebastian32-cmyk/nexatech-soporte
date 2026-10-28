@@ -2882,6 +2882,32 @@ function aplicarLimitesCaracteresNexa(){
     });
 }
 
+const NEXA_ANDROID_APP = /NexaTechAndroid\/1\.0/i.test(navigator.userAgent || "");
+const NEXA_DESKTOP_QR_ONLY = !NEXA_ANDROID_APP;
+
+function configurarModoLoginNexa(){
+    const form=document.getElementById("loginForm");
+    const separator=document.querySelector(".separator");
+    const qrBtn=document.querySelector(".login-box > .qr-button");
+    const otp=document.getElementById("twoFactorPanel");
+    const warning=document.querySelector(".login-warning");
+    if(NEXA_DESKTOP_QR_ONLY){
+        if(form) form.style.display="none";
+        if(separator) separator.style.display="none";
+        if(otp) otp.style.display="none";
+        if(warning) warning.style.display="none";
+        if(qrBtn){
+            qrBtn.style.display="flex";
+            qrBtn.innerHTML='<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>Iniciar sesión con QR';
+        }
+    } else {
+        if(form) form.style.display="block";
+        if(separator) separator.style.display="flex";
+        if(qrBtn) qrBtn.style.display="flex";
+        if(warning) warning.style.display="block";
+    }
+}
+
 /* =====================================================
    LOGIN
 ===================================================== */
@@ -2890,6 +2916,7 @@ document
 .getElementById("loginForm")
 .addEventListener("submit", function(event) {
     event.preventDefault();
+    if (NEXA_DESKTOP_QR_ONLY) return;
 
     const tipoUsuario = document.getElementById("tipoUsuario").value;
     const identificador = document.getElementById("email").value.trim().toLowerCase();
@@ -3053,6 +3080,7 @@ function cerrarSesion() {
     const twoFactorPanel = document.getElementById("twoFactorPanel");
     if (twoFactorPanel) twoFactorPanel.style.display = "none";
     window.__nexa_2fa_pending = null;
+    configurarModoLoginNexa();
 
 }
 
@@ -3220,30 +3248,13 @@ async function mostrarQR(esSegundoPaso = false) {
     const panel = document.getElementById("qrPanel");
     const qrContainer = document.getElementById("qrCode");
     const codigo = document.getElementById("qrCodigo");
-    const tipoUsuario = document.getElementById("tipoUsuario").value;
-    let email = document.getElementById("email").value.trim().toLowerCase();
-
     const error = document.getElementById("loginError");
-    if (tipoUsuario === "Administrador") {
-        const admin = administradores.find(a => String(a.email || "").toLowerCase() === email);
-        if (!admin) {
-            error.textContent = "Ese administrador no está registrado. Solo se pueden usar cuentas que agregaste.";
-            error.style.display = "block";
-            return;
-        }
-    } else {
-        if (!email.endsWith("@utu.edu.uy")) {
-            error.textContent = "Para profesores, ingresá un correo institucional @utu.edu.uy.";
-            error.style.display = "block";
-            return;
-        }
-        const profesor = profesores.find(p => String(p.email || "").toLowerCase() === email);
-        if (!profesor) {
-            error.textContent = "Ese profesor no está registrado. Pedile al administrador que agregue la cuenta.";
-            error.style.display = "block";
-            return;
-        }
-    }
+
+    if (NEXA_DESKTOP_QR_ONLY && !panel) return;
+
+    panel.style.display = "block";
+    qrContainer.innerHTML = "";
+    codigo.textContent = "Creando solicitud segura…";
 
     panel.style.display = "block";
     qrContainer.innerHTML = "";
@@ -3255,8 +3266,8 @@ async function mostrarQR(esSegundoPaso = false) {
         // Crear una solicitud pendiente. La PC conserva este token y espera
         // hasta que el teléfono que escanea el QR la autorice.
         const { data, error } = await supabaseClient.rpc("nexatech_create_login_request", {
-            p_role: tipoUsuario,
-            p_email: email
+            p_role: null,
+            p_email: null
         });
 
         if (error || !data) throw error || new Error("No se pudo crear la solicitud QR.");
@@ -3274,9 +3285,7 @@ async function mostrarQR(esSegundoPaso = false) {
             correctLevel: window.QRCode.CorrectLevel.H
         });
 
-        codigo.textContent = esSegundoPaso
-            ? "Segundo paso: escaneá este QR con el celular para confirmar tu identidad. Válido durante 5 minutos."
-            : "Escaneá este QR con el celular para autorizar el acceso. Válido durante 5 minutos.";
+        codigo.textContent = "Escaneá este QR con la APK de NexaTech para autorizar el acceso. Válido durante 5 minutos.";
         localStorage.setItem("nexatech_qr_actual", token);
 
         // La PC pregunta periódicamente si el celular ya autorizó.
@@ -3344,7 +3353,7 @@ async function revisarSolicitudQR(token) {
             if (window.__nexa_2fa_pending) {
                 window.__nexa_2fa_pending = null;
                 const f=document.getElementById("loginForm"); const sep=document.querySelector(".separator"); const qb=document.querySelector(".login-box .qr-button");
-                if(f)f.style.display=""; if(sep)sep.style.display=""; if(qb)qb.style.display="";
+                if(f)f.style.display=NEXA_DESKTOP_QR_ONLY?"none":""; if(sep)sep.style.display=NEXA_DESKTOP_QR_ONLY?"none":""; if(qb)qb.style.display="flex";
             }
         }
 
@@ -3363,9 +3372,9 @@ function ocultarQR() {
     const form = document.getElementById("loginForm");
     const separator = document.querySelector(".separator");
     const qrButton = document.querySelector(".login-box > .qr-button");
-    if (form) form.style.display = "";
-    if (separator) separator.style.display = "";
-    if (qrButton) qrButton.style.display = "";
+    if (form) form.style.display = NEXA_DESKTOP_QR_ONLY ? "none" : "";
+    if (separator) separator.style.display = NEXA_DESKTOP_QR_ONLY ? "none" : "";
+    if (qrButton) qrButton.style.display = "flex";
 }
 
 
@@ -3377,7 +3386,6 @@ async function iniciarSesionConQR(token) {
     loginPage.style.display = "flex";
     document.getElementById("app").style.display = "none";
 
-    // Vista de autorización en el teléfono.
     const oldQRAuth = document.getElementById("nexaQRAuth");
     if (oldQRAuth) oldQRAuth.remove();
 
@@ -3387,15 +3395,9 @@ async function iniciarSesionConQR(token) {
     auth.innerHTML = `
         <div style="font-size:42px;margin-bottom:12px">🔐</div>
         <h2 style="margin-bottom:10px">Autorizar acceso</h2>
-        <p id="nexaQRAuthText" style="color:var(--text-muted);margin-bottom:20px">
-            Verificando solicitud…
-        </p>
-        <button id="nexaQRAuthorize" class="login-button" style="display:none">
-            Autorizar inicio de sesión
-        </button>
-        <button id="nexaQRBack" class="qr-button" style="margin-top:10px">
-            Cancelar
-        </button>
+        <p id="nexaQRAuthText" style="color:var(--text-muted);margin-bottom:20px">Verificando solicitud…</p>
+        <button id="nexaQRAuthorize" class="login-button" style="display:none">Autorizar inicio de sesión</button>
+        <button id="nexaQRBack" class="qr-button" style="margin-top:10px">Cancelar</button>
     `;
 
     const form = loginBox.querySelector("form");
@@ -3418,90 +3420,63 @@ async function iniciarSesionConQR(token) {
     backButton.onclick = () => {
         window.history.replaceState({}, document.title, window.location.pathname);
         auth.remove();
-        form.style.display = "";
-        separator.style.display = "";
-        qrButton.style.display = "";
-        warning.style.display = "";
+        configurarModoLoginNexa();
     };
 
     try {
         if (!supabaseClient) throw new Error("Supabase no está configurado.");
 
-        // Cargar las cuentas remotas antes de comprobar permisos en el móvil.
-        window.__nexa_loading_remote = true;
-        await cargarDesdeSupabase();
-        window.__nexa_loading_remote = false;
-
         const { data, error } = await supabaseClient.rpc("nexatech_get_login_request", {
             p_token: token
         });
-
         if (error) throw error;
 
         let solicitud = Array.isArray(data) ? data[0] : data;
-        // Compatibilidad con una versión SQL anterior que declaró las columnas
-        // en orden status/role/email pero devolvía role/email/status.
-        if (solicitud && ["Administrador", "Profesor"].includes(String(solicitud.status))
-            && ["pending", "approved", "used", "expired"].includes(String(solicitud.email))) {
-            solicitud = { ...solicitud, status: solicitud.email, email: solicitud.role, role: solicitud.status };
-        }
         if (!solicitud || String(solicitud.status || "").toLowerCase() !== "pending") {
-            const estado = solicitud && solicitud.status ? String(solicitud.status) : "sin respuesta";
-            throw new Error("La solicitud QR no está pendiente (estado: " + estado + "). Generá un QR nuevo desde la PC.");
+            throw new Error("La solicitud QR no está pendiente. Generá un QR nuevo desde la PC.");
         }
 
-        const requestedEmail = String(solicitud.email || "").toLowerCase();
-        const roleIsValid = solicitud.role === "Administrador"
-            ? administradores.some(a => String(a.email || "").toLowerCase() === requestedEmail)
-            : solicitud.role === "Profesor"
-                && requestedEmail.endsWith("@utu.edu.uy")
-                && profesores.some(p => String(p.email || "").toLowerCase() === requestedEmail);
-        if (!roleIsValid) throw new Error("La cuenta no está registrada o no tiene permiso para este tipo de acceso.");
-        text.innerHTML = `Se solicitó iniciar sesión como <strong>${escapeHTML(solicitud.role)}</strong> para <strong>${escapeHTML(requestedEmail)}</strong>.<br><br>Si reconocés esta cuenta, presioná el botón para autorizar la PC.`;
-        approveButton.style.display = "block";
-
-        approveButton.onclick = async () => {
-            approveButton.disabled = true;
-            approveButton.textContent = "Autorizando…";
-
-            try {
-                const { data: approved, error: approveError } = await supabaseClient.rpc(
-                    "nexatech_approve_login_request",
-                    { p_token: token }
-                );
-
-                if (approveError) throw approveError;
-
-                const result = Array.isArray(approved) ? approved[0] : approved;
-                // La función SQL compartida devuelve success/message.
-                // También toleramos versiones antiguas que devolvían status.
-                const autorizada = !!result && (result.success === true || result.status === "approved");
-                if (!autorizada) {
-                    throw new Error((result && result.message) || "La solicitud ya venció, fue usada o no existe. Generá otro QR.");
+        // En la APK, si ya existe una sesión autenticada, esa identidad autoriza el QR.
+        if (NEXA_ANDROID_APP && nexaSesion.activa && nexaSesion.email && nexaSesion.perfil) {
+            const email = String(nexaSesion.email).toLowerCase();
+            const role = nexaSesion.perfil;
+            text.innerHTML = `Sesión móvil detectada: <strong>${escapeHTML(nexaSesion.usuario || email)}</strong>.<br><br>Autorizá este acceso en la PC.`;
+            approveButton.style.display = "block";
+            approveButton.onclick = async () => {
+                approveButton.disabled = true;
+                approveButton.textContent = "Autorizando…";
+                try {
+                    const { data: approved, error: approveError } = await supabaseClient.rpc(
+                        "nexatech_approve_login_request",
+                        { p_token: token, p_role: role, p_email: email }
+                    );
+                    if (approveError) throw approveError;
+                    const result = Array.isArray(approved) ? approved[0] : approved;
+                    if (!result || result.status !== "approved") throw new Error("La solicitud ya venció o fue utilizada.");
+                    text.innerHTML = "<strong>Acceso autorizado.</strong><br><br>Ya podés volver a la PC.";
+                    approveButton.style.display = "none";
+                    backButton.textContent = "Cerrar";
+                } catch (err) {
+                    approveButton.disabled = false;
+                    approveButton.textContent = "Autorizar inicio de sesión";
+                    text.textContent = "No se pudo autorizar: " + (err.message || "error desconocido");
                 }
+            };
+            return;
+        }
 
-                text.innerHTML = "<strong>Acceso autorizado.</strong><br><br>Ya podés volver a la PC.";
-                approveButton.style.display = "none";
-                backButton.textContent = "Cerrar";
-
-            } catch (err) {
-                console.error("QR approval:", err);
-                approveButton.disabled = false;
-                approveButton.textContent = "Autorizar inicio de sesión";
-                text.textContent = "No se pudo autorizar: " + (err && err.message ? err.message : "error desconocido");
-            }
-        };
+        // En navegador móvil, no se permite autorizar una identidad que no esté autenticada.
+        text.innerHTML = "Este QR debe autorizarse desde la <strong>APK de NexaTech</strong> con una sesión móvil válida.";
+        approveButton.style.display = "none";
 
     } catch (err) {
         console.error("QR login request:", err);
         text.textContent = (err && err.message)
             ? "No se pudo validar el QR: " + err.message
-            : "No se pudo validar el QR. Volvé a generar un código nuevo desde la PC.";
+            : "No se pudo validar el QR.";
         approveButton.style.display = "none";
     }
-
 }
-
 
 /* =====================================================
    NAVEGACIÓN
@@ -6308,14 +6283,9 @@ function escapeHTML(text) {
     iniciarSincronizacionNexa();
     document.getElementById("app").style.display = "none";
     document.getElementById("loginPage").style.display = "flex";
-    const qrBtnInicio = document.querySelector(".login-box .qr-button");
     const qrPanelInicio = document.getElementById("qrPanel");
-    const loginFormInicio = document.getElementById("loginForm");
-    const separatorInicio = document.querySelector(".separator");
-    if (qrBtnInicio) qrBtnInicio.style.display = "flex";
     if (qrPanelInicio) qrPanelInicio.style.display = "none";
-    if (loginFormInicio) loginFormInicio.style.display = "block";
-    if (separatorInicio) separatorInicio.style.display = "flex";
+    configurarModoLoginNexa();
 
 })();
 
