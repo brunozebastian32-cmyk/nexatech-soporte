@@ -2024,8 +2024,8 @@ main.content {
                         <h3>Mi jornada</h3>
                         <div id="checkinEstado" class="nexa-check-status">Cargando estado…</div>
                         <div class="field">
-                            <label for="checkinPC">PC utilizada</label>
-                            <select id="checkinPC"><option value="">Sin especificar</option></select>
+                            <label for="checkinPC">PC utilizada (obligatoria)</label>
+                            <select id="checkinPC"><option value="">Seleccionar PC</option></select>
                         </div>
                         <div class="nexa-check-actions">
                             <button class="button button-success" onclick="registrarCheckin()">Registrar check-in</button>
@@ -3019,6 +3019,7 @@ async function revisarSolicitudQR(token) {
             window.__nexa_loading_remote = true;
             await cargarDesdeSupabase();
             window.__nexa_loading_remote = false;
+            iniciarSincronizacionNexa();
             mostrarApp();
             return;
         }
@@ -3262,6 +3263,10 @@ function mostrarSeccion(id, boton) {
 ===================================================== */
 
 const NEXA_REMOTE_KEY = 1;
+let nexaRemoteUpdatedAt = localStorage.getItem("nexatech_remote_updated_at") || "";
+let nexaSyncTimer = null;
+let nexaSaveTimer = null;
+let nexaSaving = false;
 
 function actualizarEstadoSync(tipo, texto) {
     const el = document.getElementById("nexaSyncStatus");
@@ -3278,8 +3283,52 @@ function estadoNexa() {
         switches,
         reparaciones,
         tecnicos,
-        checkins
+        checkins,
+        profesores,
+        administradores
     };
+}
+
+function aplicarEstadoRemoto(s) {
+    if (!s) return;
+    if (Array.isArray(s.salones)) salones = s.salones;
+    if (Array.isArray(s.pcs)) pcs = s.pcs;
+    if (Array.isArray(s.switches)) switches = s.switches;
+    if (Array.isArray(s.reparaciones)) reparaciones = s.reparaciones;
+    if (Array.isArray(s.tecnicos)) tecnicos = s.tecnicos;
+    if (Array.isArray(s.checkins)) checkins = s.checkins;
+    if (Array.isArray(s.profesores)) profesores = s.profesores;
+    if (Array.isArray(s.administradores)) administradores = s.administradores;
+
+    localStorage.setItem("nexatech_salones", JSON.stringify(salones));
+    localStorage.setItem("nexatech_pcs", JSON.stringify(pcs));
+    localStorage.setItem("nexatech_switches", JSON.stringify(switches));
+    localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
+    localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
+    localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
+    localStorage.setItem("nexatech_profesores", JSON.stringify(profesores));
+    localStorage.setItem("nexatech_administradores", JSON.stringify(administradores));
+}
+
+async function leerEstadoRemoto({forzar=false}={}) {
+    if (!supabaseClient) return null;
+    const { data, error } = await supabaseClient
+        .from("nexatech_state")
+        .select("state,updated_at")
+        .eq("id", NEXA_REMOTE_KEY)
+        .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+
+    const remoto = data.updated_at || "";
+    if (!forzar && nexaRemoteUpdatedAt && remoto && new Date(remoto) <= new Date(nexaRemoteUpdatedAt)) {
+        return data;
+    }
+
+    aplicarEstadoRemoto(data.state || {});
+    nexaRemoteUpdatedAt = remoto || new Date().toISOString();
+    localStorage.setItem("nexatech_remote_updated_at", nexaRemoteUpdatedAt);
+    return data;
 }
 
 async function cargarDesdeSupabase() {
@@ -3287,38 +3336,14 @@ async function cargarDesdeSupabase() {
         actualizarEstadoSync("warn", "Local · configurá Supabase");
         return false;
     }
-
     try {
-        const { data, error } = await supabaseClient
-            .from("nexatech_state")
-            .select("state")
-            .eq("id", NEXA_REMOTE_KEY)
-            .maybeSingle();
-
-        if (error) throw error;
-
+        const data = await leerEstadoRemoto({forzar:true});
         if (data && data.state) {
-            const s = data.state;
-            salones = Array.isArray(s.salones) ? s.salones : salones;
-            pcs = Array.isArray(s.pcs) ? s.pcs : pcs;
-            switches = Array.isArray(s.switches) ? s.switches : switches;
-            reparaciones = Array.isArray(s.reparaciones) ? s.reparaciones : reparaciones;
-            tecnicos = Array.isArray(s.tecnicos) ? s.tecnicos : tecnicos;
-            checkins = Array.isArray(s.checkins) ? s.checkins : checkins;
-
-            localStorage.setItem("nexatech_salones", JSON.stringify(salones));
-            localStorage.setItem("nexatech_pcs", JSON.stringify(pcs));
-            localStorage.setItem("nexatech_switches", JSON.stringify(switches));
-            localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
-            localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
-            localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
-
             actualizarEstadoSync("ok", "Supabase · sincronizado");
+            actualizar();
             return true;
         }
-
-        // Primera ejecución: publica el estado inicial.
-        await guardarEnSupabase();
+        await guardarEnSupabase(true);
         return true;
     } catch (err) {
         console.error("Supabase load:", err);
@@ -3327,31 +3352,54 @@ async function cargarDesdeSupabase() {
     }
 }
 
-async function guardarEnSupabase() {
+async function sincronizarDesdeSupabase() {
+    if (!supabaseClient || window.__nexa_loading_remote || nexaSaving) return;
+    try {
+        const antes = nexaRemoteUpdatedAt;
+        const data = await leerEstadoRemoto();
+        if (data && data.updated_at && data.updated_at !== antes) {
+            actualizar();
+            actualizarEstadoSync("ok", "Supabase · actualizado");
+        }
+    } catch (err) {
+        console.warn("Supabase sync:", err);
+        actualizarEstadoSync("error", "Supabase · error");
+    }
+}
+
+function iniciarSincronizacionNexa() {
+    if (nexaSyncTimer) clearInterval(nexaSyncTimer);
+    nexaSyncTimer = setInterval(sincronizarDesdeSupabase, 1500);
+}
+
+async function guardarEnSupabase(silencioso=false) {
     if (!supabaseClient) {
         actualizarEstadoSync("warn", "Local · sin Supabase");
         return false;
     }
-
+    if (nexaSaving) return false;
+    nexaSaving = true;
     try {
-        actualizarEstadoSync("warn", "Supabase · guardando…");
-
+        if (!silencioso) actualizarEstadoSync("warn", "Supabase · guardando…");
+        const ahora = new Date().toISOString();
         const { error } = await supabaseClient
             .from("nexatech_state")
             .upsert({
                 id: NEXA_REMOTE_KEY,
                 state: estadoNexa(),
-                updated_at: new Date().toISOString()
+                updated_at: ahora
             }, { onConflict: "id" });
-
         if (error) throw error;
-
+        nexaRemoteUpdatedAt = ahora;
+        localStorage.setItem("nexatech_remote_updated_at", ahora);
         actualizarEstadoSync("ok", "Supabase · sincronizado");
         return true;
     } catch (err) {
         console.error("Supabase save:", err);
         actualizarEstadoSync("error", "Supabase · error");
         return false;
+    } finally {
+        nexaSaving = false;
     }
 }
 
@@ -3484,52 +3532,21 @@ async function abrirQRPublico(token) {
 ===================================================== */
 
 function guardar() {
+    localStorage.setItem("nexatech_salones", JSON.stringify(salones));
+    localStorage.setItem("nexatech_pcs", JSON.stringify(pcs));
+    localStorage.setItem("nexatech_switches", JSON.stringify(switches));
+    localStorage.setItem("nexatech_reparaciones", JSON.stringify(reparaciones));
+    localStorage.setItem("nexatech_tecnicos", JSON.stringify(tecnicos));
+    localStorage.setItem("nexatech_checkins", JSON.stringify(checkins));
+    localStorage.setItem("nexatech_profesores", JSON.stringify(profesores));
+    localStorage.setItem("nexatech_administradores", JSON.stringify(administradores));
 
-    localStorage.setItem(
-        "nexatech_salones",
-        JSON.stringify(salones)
-    );
-
-    localStorage.setItem(
-        "nexatech_pcs",
-        JSON.stringify(pcs)
-    );
-
-    localStorage.setItem(
-        "nexatech_switches",
-        JSON.stringify(switches)
-    );
-
-    localStorage.setItem(
-        "nexatech_reparaciones",
-        JSON.stringify(reparaciones)
-    );
-
-    localStorage.setItem(
-        "nexatech_tecnicos",
-        JSON.stringify(tecnicos)
-    );
-
-    localStorage.setItem(
-        "nexatech_checkins",
-        JSON.stringify(checkins)
-    );
-
-    localStorage.setItem(
-        "nexatech_profesores",
-        JSON.stringify(profesores)
-    );
-
-    localStorage.setItem(
-        "nexatech_administradores",
-        JSON.stringify(administradores)
-    );
-
-    // Sincronización remota no bloqueante.
     if (supabaseClient && !window.__nexa_loading_remote) {
-        guardarEnSupabase();
+        clearTimeout(nexaSaveTimer);
+        nexaSaveTimer = setTimeout(() => {
+            guardarEnSupabase().catch(err => console.error("NexaTech sync save:", err));
+        }, 150);
     }
-
 }
 
 
@@ -3722,22 +3739,34 @@ function identidadNexa() {
 }
 function fechaDiaNexa(d=new Date()) { return d.toISOString().slice(0,10); }
 function horaNexa(d=new Date()) { return d.toLocaleTimeString("es-UY", {hour:"2-digit",minute:"2-digit",second:"2-digit"}); }
+function pcDisponibleParaCheckin(pcId, email) {
+    return !checkins.some(x => String(x.pc) === String(pcId) && !x.checkout && String(x.email || "").toLowerCase() !== email);
+}
 function registrarCheckin() {
-    const u=identidadNexa(); if(!u.email){alert("No hay una sesión activa.");return;}
+    const u=identidadNexa();
+    if(!u.email){alert("No hay una sesión activa.");return;}
     const hoy=fechaDiaNexa();
     const abierto=checkins.find(x=>x.email===u.email&&x.fecha===hoy&&!x.checkout);
-    if(abierto){alert("Ya tenés un check-in abierto.");return;}
+    if(abierto){alert("Ya tenés un check-in abierto en la PC " + (pcs.find(p=>String(p.id)===String(abierto.pc))?.nombre || "seleccionada") + ".");return;}
     const pcId=document.getElementById("checkinPC")?.value || "";
-    checkins.push({id:Date.now(),email:u.email,nombre:u.nombre,perfil:u.perfil,fecha:hoy,checkin:new Date().toISOString(),checkout:"",pc:pcId?Number(pcId):null});
-    guardar(); actualizar(); alert("Check-in registrado a las "+horaNexa()+".");
+    if(!pcId){alert("Seleccioná la PC específica que vas a utilizar.");return;}
+    const pc=pcs.find(p=>String(p.id)===String(pcId));
+    if(!pc){alert("La PC seleccionada no existe.");return;}
+    if(!pcDisponibleParaCheckin(pcId,u.email)){alert("Esa PC ya tiene un check-in abierto.");return;}
+    checkins.push({id:Date.now(),email:u.email,nombre:u.nombre,perfil:u.perfil,fecha:hoy,checkin:new Date().toISOString(),checkout:"",pc:Number(pcId),pcNombre:pc.nombre,salon:pc.salon});
+    guardar(); actualizar();
+    alert("Check-in registrado en " + pc.nombre + " a las " + horaNexa() + ".");
 }
 function registrarCheckout() {
-    const u=identidadNexa(); if(!u.email){alert("No hay una sesión activa.");return;}
+    const u=identidadNexa();
+    if(!u.email){alert("No hay una sesión activa.");return;}
     const hoy=fechaDiaNexa();
     const abierto=checkins.find(x=>x.email===u.email&&x.fecha===hoy&&!x.checkout);
     if(!abierto){alert("No hay un check-in abierto para cerrar.");return;}
     abierto.checkout=new Date().toISOString();
-    guardar(); actualizar(); alert("Check-out registrado a las "+horaNexa()+".");
+    guardar(); actualizar();
+    const pc=pcs.find(p=>String(p.id)===String(abierto.pc));
+    alert("Check-out registrado de " + (pc?.nombre || abierto.pcNombre || "la PC") + " a las " + horaNexa() + ".");
 }
 function actualizarCheckinNexa(){
     const u=identidadNexa(), hoy=fechaDiaNexa();
@@ -3746,38 +3775,96 @@ function actualizarCheckinNexa(){
     const adminHist=document.getElementById("checkinAdminHistorial");
     if(!estado)return;
     const abierto=checkins.find(x=>x.email===u.email&&x.fecha===hoy&&!x.checkout);
-    estado.innerHTML=abierto ? "Estado: <strong>EN JORNADA</strong> · entrada " + new Date(abierto.checkin).toLocaleTimeString("es-UY") : "Estado: <strong>FUERA</strong>";
+    estado.innerHTML=abierto ? "Estado: <strong>EN JORNADA</strong> · " + escapeHTML(pcs.find(p=>String(p.id)===String(abierto.pc))?.nombre || abierto.pcNombre || "PC") + " · entrada " + new Date(abierto.checkin).toLocaleTimeString("es-UY") : "Estado: <strong>FUERA</strong>";
     const propios=checkins.filter(x=>x.email===u.email).slice(-12).reverse();
-    hist.innerHTML=propios.length?'<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>PC</th></tr></thead><tbody>'+propios.map(x=>{const pc=pcs.find(p=>p.id==x.pc);return `<tr><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td><td>${escapeHTML(pc?.nombre||"—")}</td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Todavía no hay movimientos.</div>';
+    hist.innerHTML=propios.length?'<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>PC</th></tr></thead><tbody>'+propios.map(x=>{const pc=pcs.find(p=>String(p.id)===String(x.pc));return `<tr><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td><td>${escapeHTML(pc?.nombre||x.pcNombre||"—")}</td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Todavía no hay movimientos.</div>';
     if(esAdministradorNexa()&&adminHist){
         const all=checkins.slice().sort((a,b)=>String(b.checkin).localeCompare(String(a.checkin))).slice(0,40);
-        adminHist.innerHTML=all.length?'<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Usuario</th><th>Perfil</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>PC</th></tr></thead><tbody>'+all.map(x=>{const pc=pcs.find(p=>p.id==x.pc);return `<tr><td>${escapeHTML(x.email)}</td><td>${escapeHTML(x.perfil)}</td><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td><td>${escapeHTML(pc?.nombre||"—")}</td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Sin movimientos.</div>';
+        adminHist.innerHTML=all.length?'<div class="nexa-table-wrap"><table class="nexa-table"><thead><tr><th>Usuario</th><th>Perfil</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>PC</th></tr></thead><tbody>'+all.map(x=>{const pc=pcs.find(p=>String(p.id)===String(x.pc));return `<tr><td>${escapeHTML(x.email)}</td><td>${escapeHTML(x.perfil)}</td><td>${escapeHTML(x.fecha)}</td><td>${new Date(x.checkin).toLocaleTimeString("es-UY")}</td><td>${x.checkout?new Date(x.checkout).toLocaleTimeString("es-UY"):"—"}</td><td>${escapeHTML(pc?.nombre||x.pcNombre||"—")}</td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Sin movimientos.</div>';
     }
 }
 function prepararSelectMapaNexa(){
     const sel=document.getElementById("mapSalonSelect"); if(!sel)return;
     const actual=sel.value || String(salones[0]?.id||"");
     sel.innerHTML=salones.map(s=>`<option value="${s.id}">${escapeHTML(s.nombre)}</option>`).join("");
-    if(salones.some(s=>String(s.id)===actual))sel.value=actual;
+    if(salones.some(s=>String(s.id)===actual)) sel.value=actual;
+    else if(salones[0]) sel.value=String(salones[0].id);
 }
 function centrarMapaNexa(){
-    const lista=pcs.filter(p=>String(p.salon)===String(document.getElementById("mapSalonSelect")?.value));
-    lista.forEach((pc,i)=>{pc.mapa={x:15+(i%4)*22,y:20+Math.floor(i/4)*24,z:0};});
+    const salonId=document.getElementById("mapSalonSelect")?.value;
+    const lista=pcs.filter(p=>String(p.salon)===String(salonId));
+    lista.forEach((pc,i)=>{pc.mapa={x:18+(i%5)*16,y:20+Math.floor(i/5)*22,z:0};});
     guardar();renderMapa3DNexa();
 }
 function claseMapaPC(pc){return pc.estado==="En reparación"?"repair":pc.estado==="Fuera de servicio"?"off":pc.estado==="Sin internet"?"net":""}
 function renderMapa3DNexa(){
-    const wrap=document.getElementById("mapaPCs"), sel=document.getElementById("mapSalonSelect"); if(!wrap||!sel)return;
-    const salonId=sel.value; wrap.innerHTML="";
-    pcs.filter(p=>String(p.salon)===String(salonId)).forEach(pc=>{
-        if(!pc.mapa)pc.mapa={x:10+Math.random()*70,y:10+Math.random()*70,z:0};
-        const el=document.createElement("div"); el.className="nexa-map-pc "+claseMapaPC(pc); el.dataset.id=pc.id; el.innerHTML=`<span class="pc-led"></span>${escapeHTML(pc.nombre)}`;
-        const draw=()=>{const scale=1+((Number(pc.mapa.z)||0)/100);el.style.left=pc.mapa.x+"%";el.style.top=pc.mapa.y+"%";el.style.transform=`translate(-50%,-50%) translateZ(${pc.mapa.z||0}px) scale(${scale})`;}; draw();
-        let drag=false,ox=0,oy=0;
-        el.addEventListener("pointerdown",e=>{if(!esAdministradorNexa())return;drag=true;ox=e.clientX;oy=e.clientY;el.setPointerCapture(e.pointerId);});
-        el.addEventListener("pointermove",e=>{if(!drag)return;const rect=document.getElementById("mapa3D").getBoundingClientRect();pc.mapa.x=Math.max(4,Math.min(96,pc.mapa.x+(e.clientX-ox)/rect.width*100));pc.mapa.y=Math.max(4,Math.min(96,pc.mapa.y+(e.clientY-oy)/rect.height*100));ox=e.clientX;oy=e.clientY;draw();});
-        el.addEventListener("pointerup",()=>{if(drag){drag=false;guardar();}});
-        el.addEventListener("wheel",e=>{if(!esAdministradorNexa())return;e.preventDefault();pc.mapa.z=Math.max(-20,Math.min(80,(Number(pc.mapa.z)||0)-(e.deltaY/10)));draw();guardar();},{passive:false});
+    const wrap=document.getElementById("mapaPCs"), sel=document.getElementById("mapSalonSelect"), map=document.getElementById("mapa3D");
+    if(!wrap||!sel||!map)return;
+    const salonId=sel.value;
+    wrap.innerHTML="";
+    const lista=pcs.filter(p=>String(p.salon)===String(salonId));
+    lista.forEach((pc,i)=>{
+        if(!pc.mapa || !Number.isFinite(Number(pc.mapa.x)) || !Number.isFinite(Number(pc.mapa.y))){
+            pc.mapa={x:18+(i%5)*16,y:20+Math.floor(i/5)*22,z:0};
+        }
+        const el=document.createElement("div");
+        el.className="nexa-map-pc "+claseMapaPC(pc);
+        el.dataset.id=String(pc.id);
+        el.innerHTML=`<span class="pc-led"></span><span>${escapeHTML(pc.nombre)}</span>`;
+
+        const draw=()=>{
+            const x=Math.max(4,Math.min(96,Number(pc.mapa.x)||4));
+            const y=Math.max(4,Math.min(96,Number(pc.mapa.y)||4));
+            const z=Math.max(0,Math.min(120,Number(pc.mapa.z)||0));
+            el.style.left=x+"%";
+            el.style.top=y+"%";
+            el.style.transform=`translate(-50%,-50%) translateY(${-z}px) scale(${1+z/300})`;
+            el.title=pc.nombre+" · X "+Math.round(x)+" · Y "+Math.round(y)+" · Z "+Math.round(z);
+        };
+        draw();
+
+        let dragging=false, lastX=0, lastY=0, moved=false;
+        const finalizar=()=>{
+            if(!dragging)return;
+            dragging=false;
+            el.classList.remove("dragging");
+            if(moved){ guardar(); }
+            moved=false;
+        };
+
+        el.addEventListener("pointerdown",e=>{
+            if(!esAdministradorNexa())return;
+            e.preventDefault();
+            e.stopPropagation();
+            dragging=true; moved=false;
+            lastX=e.clientX; lastY=e.clientY;
+            el.classList.add("dragging");
+            try{el.setPointerCapture(e.pointerId);}catch(_){}
+        });
+        el.addEventListener("pointermove",e=>{
+            if(!dragging)return;
+            const rect=map.getBoundingClientRect();
+            if(!rect.width||!rect.height)return;
+            const dx=(e.clientX-lastX)/rect.width*100;
+            const dy=(e.clientY-lastY)/rect.height*100;
+            if(Math.abs(dx)+Math.abs(dy)>0){
+                pc.mapa.x=Math.max(4,Math.min(96,(Number(pc.mapa.x)||4)+dx));
+                pc.mapa.y=Math.max(4,Math.min(96,(Number(pc.mapa.y)||4)+dy));
+                moved=true; draw();
+            }
+            lastX=e.clientX; lastY=e.clientY;
+        });
+        el.addEventListener("pointerup",e=>{try{el.releasePointerCapture(e.pointerId);}catch(_){} finalizar();});
+        el.addEventListener("pointercancel",finalizar);
+        el.addEventListener("lostpointercapture",finalizar);
+        el.addEventListener("wheel",e=>{
+            if(!esAdministradorNexa())return;
+            e.preventDefault();
+            e.stopPropagation();
+            pc.mapa.z=Math.max(0,Math.min(120,(Number(pc.mapa.z)||0)-(e.deltaY/10)));
+            draw();
+            guardar();
+        },{passive:false});
         wrap.appendChild(el);
     });
 }
@@ -4090,19 +4177,20 @@ function imprimirQRPC() {
 .nexa-table th{background:#17171b;color:#fff}
 .nexa-table tr:last-child td{border-bottom:0}
 .nexa-2fa-note{margin-top:12px;padding:10px 12px;border:1px solid rgba(139,0,0,.55);background:rgba(139,0,0,.12);border-radius:9px;color:var(--text-muted);font-size:12px;line-height:1.5}
-.nexa-map-wrap{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:16px;background:#070707;min-height:540px;perspective:1000px}
+.nexa-map-wrap{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:16px;background:radial-gradient(circle at 50% 35%,#202026 0,#0b0b0e 65%);min-height:540px;touch-action:none;perspective:900px}
 .nexa-map-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.nexa-map-stage{position:absolute;inset:0;transform-style:preserve-3d;transform:rotateX(56deg) rotateZ(0deg) scale(.92);transform-origin:center center}
-.nexa-map-floor{position:absolute;left:8%;top:8%;width:84%;height:84%;border:2px solid rgba(255,255,255,.15);background:repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 8%),repeating-linear-gradient(0deg,rgba(255,255,255,.04) 0 1px,transparent 1px 8%),linear-gradient(135deg,#17171b,#0d0d10);box-shadow:0 0 0 1px rgba(139,0,0,.18) inset,0 35px 80px rgba(0,0,0,.55);transform-style:preserve-3d}
-.nexa-map-wall{position:absolute;background:#1d1d22;border:1px solid #38383f;transform-origin:left bottom}
-.nexa-map-wall.w1{left:8%;top:8%;width:84%;height:18px;transform:translateZ(30px)}
-.nexa-map-wall.w2{left:8%;top:8%;width:18px;height:84%;transform:translateZ(30px)}
-.nexa-map-pc{position:absolute;width:76px;height:58px;border:1px solid rgba(255,255,255,.25);border-radius:10px;background:linear-gradient(145deg,#26262d,#0e0e11);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:11px;cursor:grab;user-select:none;box-shadow:0 12px 20px rgba(0,0,0,.55),0 0 0 2px rgba(139,0,0,.15);transform-style:preserve-3d}
-.nexa-map-pc:active{cursor:grabbing}
+.nexa-map-stage{position:absolute;inset:0;transform-style:preserve-3d;pointer-events:none}
+.nexa-map-floor{position:absolute;left:7%;top:9%;width:86%;height:82%;border:2px solid rgba(255,255,255,.16);background:repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 38px),repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 38px),linear-gradient(145deg,#1b1b21,#0d0d10);box-shadow:inset 0 0 0 1px rgba(139,0,0,.2),0 30px 70px rgba(0,0,0,.6);transform:rotateX(58deg) translateY(34px) scaleY(.82);transform-origin:center bottom}
+.nexa-map-wall{position:absolute;background:linear-gradient(#29292f,#15151a);border:1px solid #3b3b43;box-shadow:0 8px 20px rgba(0,0,0,.5);z-index:2}
+.nexa-map-wall.w1{left:7%;top:9%;width:86%;height:20px}
+.nexa-map-wall.w2{left:7%;top:9%;width:20px;height:82%}
+#mapaPCs{position:absolute;inset:0;z-index:5}
+.nexa-map-pc{position:absolute;pointer-events:auto;width:82px;height:62px;border:1px solid rgba(255,255,255,.28);border-radius:10px;background:linear-gradient(145deg,#292a31,#0c0c0f);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:11px;cursor:grab;user-select:none;touch-action:none;box-shadow:0 18px 24px rgba(0,0,0,.55),0 0 0 2px rgba(139,0,0,.15);will-change:transform,left,top}
+.nexa-map-pc.dragging{cursor:grabbing;z-index:20;box-shadow:0 25px 35px rgba(0,0,0,.7),0 0 0 2px rgba(180,0,0,.5)}
 .nexa-map-pc .pc-led{width:7px;height:7px;border-radius:50%;background:#2e7d32;box-shadow:0 0 8px rgba(46,125,50,.7);margin-bottom:5px}
 .nexa-map-pc.repair .pc-led{background:#b08000}.nexa-map-pc.off .pc-led{background:#b03030}.nexa-map-pc.net .pc-led{background:#0055a5}
 .nexa-map-help{color:var(--text-muted);font-size:12px;margin-top:9px}
-@media(max-width:850px){.nexa-checkin-wrap{grid-template-columns:1fr}.nexa-map-wrap{min-height:430px}.nexa-map-stage{transform:rotateX(56deg) scale(.78)}}
+@media(max-width:850px){.nexa-checkin-wrap{grid-template-columns:1fr}.nexa-map-wrap{min-height:430px}.nexa-map-pc{width:70px;height:54px;font-size:10px}}
 </style>
 
         </head>
@@ -4463,6 +4551,20 @@ function actualizarSelects() {
             </option>`;
 
     });
+
+
+    const checkinPC = document.getElementById("checkinPC");
+    if (checkinPC) {
+        const actual = checkinPC.value;
+        const ocupadas = new Set(checkins.filter(x => !x.checkout).map(x => String(x.pc)));
+        checkinPC.innerHTML = `<option value="">Seleccionar PC</option>` + pcs.map(pc => {
+            const salon = salones.find(s => String(s.id) === String(pc.salon));
+            const ocupada = ocupadas.has(String(pc.id));
+            const texto = `${escapeHTML(pc.nombre)} · ${escapeHTML(salon?.nombre || "Sin salón")}${ocupada ? " · OCUPADA" : ""}`;
+            return `<option value="${pc.id}" ${ocupada ? "disabled" : ""}>${texto}</option>`;
+        }).join("");
+        if (pcs.some(pc => String(pc.id) === String(actual))) checkinPC.value = actual;
+    }
 
 }
 
@@ -5935,6 +6037,7 @@ function escapeHTML(text) {
     window.__nexa_loading_remote = true;
     await cargarDesdeSupabase();
     window.__nexa_loading_remote = false;
+    iniciarSincronizacionNexa();
     document.getElementById("app").style.display = "none";
     document.getElementById("loginPage").style.display = "flex";
 
