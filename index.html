@@ -1482,7 +1482,6 @@ main.content {
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
                 <button type="button" class="qr-button" onclick="seleccionarCanal2FA('email')">📧 Email</button>
                 <button type="button" class="qr-button" onclick="seleccionarCanal2FA('phone')">📱 Celular</button>
-                <button type="button" class="qr-button" onclick="iniciarSegundoPasoQR()">▦ QR</button>
             </div>
             <div class="login-field">
                 <label for="twoFactorDestination">Destino de verificación</label>
@@ -2882,8 +2881,12 @@ function aplicarLimitesCaracteresNexa(){
     });
 }
 
-const NEXA_ANDROID_APP = /NexaTechAndroid\/1\.0/i.test(navigator.userAgent || "");
-const NEXA_DESKTOP_QR_ONLY = !NEXA_ANDROID_APP;
+// La web/EXE conserva login normal + QR. OTP solo se habilita en móviles.
+// La APK Android añade NexaTechAndroid/1.0 al User-Agent; iOS puede añadir NexaTechIOS/1.0.
+const NEXA_USER_AGENT = navigator.userAgent || "";
+const NEXA_MOBILE_OTP = /NexaTechAndroid\/1\.0|NexaTechIOS\/1\.0/i.test(NEXA_USER_AGENT)
+    || /Android|iPhone|iPad|iPod/i.test(NEXA_USER_AGENT);
+const NEXA_DESKTOP_QR_ONLY = !NEXA_MOBILE_OTP;
 
 function configurarModoLoginNexa(){
     const form=document.getElementById("loginForm");
@@ -2891,19 +2894,19 @@ function configurarModoLoginNexa(){
     const qrBtn=document.querySelector(".login-box > .qr-button");
     const otp=document.getElementById("twoFactorPanel");
     const warning=document.querySelector(".login-warning");
-    if(NEXA_DESKTOP_QR_ONLY){
-        if(form) form.style.display="none";
+    // Nunca ocultar el login normal en PC/web/EXE.
+    if(form) form.style.display="block";
+    if(otp) otp.style.display="none";
+    if(NEXA_MOBILE_OTP){
         if(separator) separator.style.display="none";
-        if(otp) otp.style.display="none";
+        if(qrBtn) qrBtn.style.display="none";
         if(warning) warning.style.display="none";
+    } else {
+        if(separator) separator.style.display="flex";
         if(qrBtn){
             qrBtn.style.display="flex";
             qrBtn.innerHTML='<svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>Iniciar sesión con QR';
         }
-    } else {
-        if(form) form.style.display="block";
-        if(separator) separator.style.display="flex";
-        if(qrBtn) qrBtn.style.display="flex";
         if(warning) warning.style.display="block";
     }
 }
@@ -2916,7 +2919,6 @@ document
 .getElementById("loginForm")
 .addEventListener("submit", function(event) {
     event.preventDefault();
-    if (NEXA_DESKTOP_QR_ONLY) return;
 
     const tipoUsuario = document.getElementById("tipoUsuario").value;
     const identificador = document.getElementById("email").value.trim().toLowerCase();
@@ -2973,8 +2975,20 @@ document
 
     if (acceso) {
         error.style.display = "none";
-        window.__nexa_2fa_pending = { email: emailCuenta, tipoUsuario, nombreUsuario };
-        iniciarSegundoPaso();
+        if (NEXA_MOBILE_OTP) {
+            window.__nexa_2fa_pending = { email: emailCuenta, tipoUsuario, nombreUsuario };
+            iniciarSegundoPaso();
+            return;
+        }
+        // En web/EXE, el login normal entra directamente; QR queda como alternativa.
+        nexaSesion = { activa:true, usuario:nombreUsuario, email:String(emailCuenta||"").toLowerCase(), perfil:tipoUsuario };
+        limpiarCredencialesPersistidasNexa();
+        window.__nexa_loading_remote = true;
+        cargarDesdeSupabase().catch(err=>console.error("NexaTech carga inicial:",err)).finally(()=>{
+            window.__nexa_loading_remote = false;
+            iniciarSincronizacionNexa();
+            mostrarApp();
+        });
         return;
     }
 
@@ -3353,7 +3367,7 @@ async function revisarSolicitudQR(token) {
             if (window.__nexa_2fa_pending) {
                 window.__nexa_2fa_pending = null;
                 const f=document.getElementById("loginForm"); const sep=document.querySelector(".separator"); const qb=document.querySelector(".login-box .qr-button");
-                if(f)f.style.display=NEXA_DESKTOP_QR_ONLY?"none":""; if(sep)sep.style.display=NEXA_DESKTOP_QR_ONLY?"none":""; if(qb)qb.style.display="flex";
+                if(f)f.style.display="block"; if(sep)sep.style.display=NEXA_MOBILE_OTP?"none":"flex"; if(qb)qb.style.display=NEXA_MOBILE_OTP?"none":"flex";
             }
         }
 
@@ -3372,9 +3386,7 @@ function ocultarQR() {
     const form = document.getElementById("loginForm");
     const separator = document.querySelector(".separator");
     const qrButton = document.querySelector(".login-box > .qr-button");
-    if (form) form.style.display = NEXA_DESKTOP_QR_ONLY ? "none" : "";
-    if (separator) separator.style.display = NEXA_DESKTOP_QR_ONLY ? "none" : "";
-    if (qrButton) qrButton.style.display = "flex";
+    configurarModoLoginNexa();
 }
 
 
