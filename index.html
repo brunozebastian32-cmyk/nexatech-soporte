@@ -1476,6 +1476,27 @@ main.content {
 
         </button>
 
+        <div id="twoFactorPanel" style="display:none; margin-top:16px;">
+            <strong>Verificación en 2 pasos</strong>
+            <p style="margin-top:8px;color:var(--text-muted);font-size:13px;">Elegí dónde recibir el código de 6 dígitos.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
+                <button type="button" class="qr-button" onclick="seleccionarCanal2FA('email')">📧 Email</button>
+                <button type="button" class="qr-button" onclick="seleccionarCanal2FA('phone')">📱 Celular</button>
+                <button type="button" class="qr-button" onclick="iniciarSegundoPasoQR()">▦ QR</button>
+            </div>
+            <div class="login-field">
+                <label for="twoFactorDestination">Destino de verificación</label>
+                <input type="text" id="twoFactorDestination" maxlength="100" autocomplete="off" placeholder="Gmail o número de celular">
+            </div>
+            <button type="button" class="login-button" onclick="enviarCodigo2FA()">Enviar código</button>
+            <div class="login-field" style="margin-top:10px;">
+                <label for="twoFactorCode">Código de 6 dígitos</label>
+                <input type="text" id="twoFactorCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000">
+            </div>
+            <button type="button" class="login-button" onclick="verificarCodigo2FA()">Verificar código</button>
+            <div id="twoFactorStatus" style="font-size:12px;color:var(--text-muted);margin-top:8px;"></div>
+        </div>
+
         <div id="qrPanel">
 
             <strong>Acceso mediante QR</strong>
@@ -2926,7 +2947,7 @@ document
     if (acceso) {
         error.style.display = "none";
         window.__nexa_2fa_pending = { email: emailCuenta, tipoUsuario, nombreUsuario };
-        iniciarSegundoPasoQR();
+        iniciarSegundoPaso();
         return;
     }
 
@@ -3029,6 +3050,8 @@ function cerrarSesion() {
     }
     const qrPanel = document.getElementById("qrPanel");
     if (qrPanel) qrPanel.style.display = "none";
+    const twoFactorPanel = document.getElementById("twoFactorPanel");
+    if (twoFactorPanel) twoFactorPanel.style.display = "none";
     window.__nexa_2fa_pending = null;
 
 }
@@ -3037,6 +3060,102 @@ function cerrarSesion() {
 /* =====================================================
    SEGUNDO PASO DE VALIDACIÓN (2FA)
 ===================================================== */
+let __nexa_2fa_channel = "email";
+let __nexa_2fa_sent_to = "";
+let __nexa_2fa_last_send = 0;
+
+function iniciarSegundoPaso(){
+    const pending=window.__nexa_2fa_pending;
+    if(!pending) return;
+    const panel=document.getElementById("twoFactorPanel");
+    const form=document.getElementById("loginForm");
+    const separator=document.querySelector(".separator");
+    const qrButton=document.querySelector(".login-box > .qr-button");
+    if(panel) panel.style.display="block";
+    if(form) form.style.display="none";
+    if(separator) separator.style.display="none";
+    if(qrButton) qrButton.style.display="none";
+    const dest=document.getElementById("twoFactorDestination");
+    if(dest){dest.value="";dest.placeholder="Gmail o número de celular";}
+    const code=document.getElementById("twoFactorCode");
+    if(code) code.value="";
+    const status=document.getElementById("twoFactorStatus");
+    if(status) status.textContent="Elegí Email o Celular y enviá el código.";
+}
+
+function seleccionarCanal2FA(canal){
+    __nexa_2fa_channel=canal;
+    const input=document.getElementById("twoFactorDestination");
+    if(!input) return;
+    input.placeholder=canal==="email"?"Gmail o correo donde recibirlo":"Número de celular con código de país";
+    input.inputMode=canal==="phone"?"tel":"email";
+    const status=document.getElementById("twoFactorStatus");
+    if(status) status.textContent=canal==="email"?"El código llegará al email indicado.":"El código llegará al celular indicado.";
+}
+
+async function enviarCodigo2FA(){
+    const pending=window.__nexa_2fa_pending;
+    const dest=String(document.getElementById("twoFactorDestination")?.value||"").trim();
+    const status=document.getElementById("twoFactorStatus");
+    if(!pending){if(status)status.textContent="La solicitud de acceso venció.";return;}
+    if(Date.now()-__nexa_2fa_last_send<30000){if(status)status.textContent="Esperá 30 segundos antes de pedir otro código.";return;}
+    if(__nexa_2fa_channel==="email"){
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dest)){if(status)status.textContent="Ingresá un correo válido.";return;}
+    }else{
+        if(!/^\+?[0-9 ()-]{8,20}$/.test(dest)){if(status)status.textContent="Ingresá un número de celular válido.";return;}
+    }
+    try{
+        if(!supabaseClient) throw new Error("Supabase no está configurado.");
+        status.textContent="Enviando código…";
+        const options={shouldCreateUser:false};
+        let result;
+        if(__nexa_2fa_channel==="email") result=await supabaseClient.auth.signInWithOtp({email:dest,options});
+        else result=await supabaseClient.auth.signInWithOtp({phone:dest,options});
+        if(result.error) throw result.error;
+        __nexa_2fa_sent_to=dest;
+        __nexa_2fa_last_send=Date.now();
+        status.textContent=__nexa_2fa_channel==="email"?"Código enviado al email. Revisá también spam.":"Código enviado al celular.";
+    }catch(err){
+        console.error("2FA OTP:",err);
+        status.textContent="No se pudo enviar el código. Verificá que Email/SMS OTP esté habilitado en Supabase.";
+    }
+}
+
+async function verificarCodigo2FA(){
+    const pending=window.__nexa_2fa_pending;
+    const code=String(document.getElementById("twoFactorCode")?.value||"").replace(/\D/g,"");
+    const status=document.getElementById("twoFactorStatus");
+    if(!pending){if(status)status.textContent="La solicitud de acceso venció.";return;}
+    if(!/^[0-9]{6}$/.test(code)){if(status)status.textContent="El código debe tener 6 dígitos.";return;}
+    if(!__nexa_2fa_sent_to){if(status)status.textContent="Primero solicitá un código.";return;}
+    try{
+        if(!supabaseClient) throw new Error("Supabase no está configurado.");
+        status.textContent="Verificando…";
+        const verifyType=__nexa_2fa_channel==="email"?"email":"sms";
+        const result=await supabaseClient.auth.verifyOtp({[__nexa_2fa_channel]:__nexa_2fa_sent_to,token:code,type:verifyType});
+        if(result.error) throw result.error;
+        await completarSegundoPasoNexa();
+    }catch(err){
+        console.error("2FA verify:",err);
+        status.textContent="Código incorrecto, vencido o no habilitado en Supabase.";
+    }
+}
+
+async function completarSegundoPasoNexa(){
+    const pending=window.__nexa_2fa_pending;
+    if(!pending) return;
+    nexaSesion={activa:true,usuario:pending.nombreUsuario,email:String(pending.email||"").toLowerCase(),perfil:pending.tipoUsuario};
+    try{await supabaseClient.auth.signOut();}catch(e){}
+    limpiarCredencialesPersistidasNexa();
+    window.__nexa_2fa_pending=null;
+    const status=document.getElementById("twoFactorStatus");
+    if(status)status.textContent="Acceso autorizado. Iniciando sesión…";
+    window.__nexa_loading_remote=true;
+    try{await cargarDesdeSupabase();}finally{window.__nexa_loading_remote=false;}
+    iniciarSincronizacionNexa();
+    mostrarApp();
+}
+
 function iniciarSegundoPasoQR() {
     const pending = window.__nexa_2fa_pending;
     if (!pending) return;
@@ -3045,7 +3164,7 @@ function iniciarSegundoPasoQR() {
     const qrContainer = document.getElementById("qrCode");
     const form = document.getElementById("loginForm");
     const separator = document.querySelector(".separator");
-    const qrButton = document.querySelector(".login-box .qr-button");
+    const qrButton = document.querySelector(".login-box > .qr-button");
     panel.style.display = "block";
     form.style.display = "none";
     if (separator) separator.style.display = "none";
@@ -3243,7 +3362,7 @@ function ocultarQR() {
     document.getElementById("qrPanel").style.display = "none";
     const form = document.getElementById("loginForm");
     const separator = document.querySelector(".separator");
-    const qrButton = document.querySelector(".login-box .qr-button");
+    const qrButton = document.querySelector(".login-box > .qr-button");
     if (form) form.style.display = "";
     if (separator) separator.style.display = "";
     if (qrButton) qrButton.style.display = "";
