@@ -1986,26 +1986,6 @@ main.content {
 
             </div>
 
-            <div class="panel">
-                <h2>Mapa 2D de computadoras</h2>
-                <p style="color:var(--text-muted);line-height:1.5;margin-bottom:12px">
-                    Organizá las PCs sobre el plano del salón. El mapa usa un piso de madera y cada PC se puede mover libremente. Los cambios se guardan y se comparten entre dispositivos.
-                </p>
-                <div class="nexa-map-toolbar">
-                    <select id="mapSalonSelect" onchange="renderMapa2DNexa()"></select>
-                    <button class="button" onclick="agregarPCDesdeMapaNexa()">+ Agregar PC</button>
-                    <button class="button button-secondary" onclick="centrarMapaNexa()">Reordenar PCs</button>
-                </div>
-                <div id="mapa3D" class="nexa-map-wrap nexa-map-2d">
-                    <div class="nexa-map-stage">
-                        <div class="nexa-map-floor"></div>
-                        <div class="nexa-map-wall w1"></div>
-                        <div class="nexa-map-wall w2"></div>
-                        <div id="mapaPCs"></div>
-                    </div>
-                </div>
-                <div class="nexa-map-help">Solo el administrador puede mover o agregar PCs. Arrastrá una PC para ubicarla en el salón.</div>
-            </div>
 
         </section>
 
@@ -2608,8 +2588,8 @@ let salones = JSON.parse(localStorage.getItem("nexatech_salones")) || [
 ];
 
 let pcs = JSON.parse(localStorage.getItem("nexatech_pcs")) || [
-    { id: 1, nombre: "PC-01", salon: 101, estado: "Funcionando", qrToken: "NEXATECH-PC01-8812", fechaRegistro: "01/09/2026", mapa:{x:18,y:20,z:0} },
-    { id: 2, nombre: "PC-02", salon: 101, estado: "En reparación", qrToken: "NEXATECH-PC02-9913", fechaRegistro: "02/09/2026", mapa:{x:48,y:20,z:0} }
+    { id: 1, nombre: "PC-01", salon: 101, estado: "Funcionando", qrToken: "NEXATECH-PC01-8812", fechaRegistro: "01/09/2026" },
+    { id: 2, nombre: "PC-02", salon: 101, estado: "En reparación", qrToken: "NEXATECH-PC02-9913", fechaRegistro: "02/09/2026" }
 ];
 
 let switches = JSON.parse(localStorage.getItem("nexatech_switches")) || [
@@ -2671,7 +2651,6 @@ localStorage.setItem("nexatech_profesores", JSON.stringify(quitarCredencialesDeC
 localStorage.setItem("nexatech_administradores", JSON.stringify(quitarCredencialesDeCacheLocalNexa(administradores)));
 
 pcs.forEach((pc, i) => {
-    if (!pc.mapa) pc.mapa = { x: 15 + ((i * 23) % 70), y: 20 + ((i * 17) % 65), z: 0 };
 });
 localStorage.setItem("nexatech_pcs", JSON.stringify(pcs));
 
@@ -3899,116 +3878,6 @@ function actualizarCheckinNexa(){
             : '<div class="empty">Sin movimientos.</div>';
     }
 }
-function prepararSelectMapaNexa(){
-    const sel=document.getElementById("mapSalonSelect"); if(!sel)return;
-    const actual=sel.value || String(salones[0]?.id||"");
-    sel.innerHTML=salones.map(s=>`<option value="${s.id}">${escapeHTML(s.nombre)}</option>`).join("");
-    if(salones.some(s=>String(s.id)===actual)) sel.value=actual;
-    else if(salones[0]) sel.value=String(salones[0].id);
-}
-function centrarMapaNexa(){
-    const salonId=document.getElementById("mapSalonSelect")?.value;
-    const lista=pcs.filter(p=>String(p.salon)===String(salonId));
-    lista.forEach((pc,i)=>{pc.mapa={x:18+(i%5)*16,y:20+Math.floor(i/5)*22,z:0};});
-    guardar();renderMapa2DNexa();
-}
-function claseMapaPC(pc){return pc.estado==="En reparación"?"repair":pc.estado==="Fuera de servicio"?"off":pc.estado==="Sin internet"?"net":""}
-function renderMapa2DNexa(){
-    const wrap=document.getElementById("mapaPCs"), sel=document.getElementById("mapSalonSelect"), map=document.getElementById("mapa3D");
-    if(!wrap||!sel||!map)return;
-    const salonId=sel.value;
-    wrap.innerHTML="";
-    const lista=pcs.filter(p=>String(p.salon)===String(salonId));
-    lista.forEach((pc,i)=>{
-        if(!pc.mapa || !Number.isFinite(Number(pc.mapa.x)) || !Number.isFinite(Number(pc.mapa.y))){
-            pc.mapa={x:15+(i%5)*17,y:18+Math.floor(i/5)*22,z:0};
-        }
-        const el=document.createElement("div");
-        el.className="nexa-map-pc "+claseMapaPC(pc);
-        el.dataset.id=String(pc.id);
-        el.innerHTML=`<span class="pc-led"></span><span>${escapeHTML(pc.nombre)}</span>`;
-        const draw=()=>{
-            const x=Math.max(7,Math.min(93,Number(pc.mapa.x)||7));
-            const y=Math.max(8,Math.min(92,Number(pc.mapa.y)||8));
-            el.style.left=x+"%";
-            el.style.top=y+"%";
-            el.style.transform="translate(-50%,-50%)";
-            el.title=pc.nombre+" · X "+Math.round(x)+" · Y "+Math.round(y);
-        };
-        draw();
-
-        let dragging=false,lastX=0,lastY=0,moved=false;
-        const finalizar=()=>{
-            if(!dragging)return;
-            dragging=false;
-            el.classList.remove("dragging");
-            if(moved) guardar();
-            moved=false;
-        };
-        el.addEventListener("pointerdown",e=>{
-            if(!esAdministradorNexa())return;
-            e.preventDefault(); e.stopPropagation();
-            dragging=true;moved=false;lastX=e.clientX;lastY=e.clientY;
-            el.classList.add("dragging");
-            try{el.setPointerCapture(e.pointerId);}catch(_){}
-        });
-        el.addEventListener("pointermove",e=>{
-            if(!dragging)return;
-            const rect=map.getBoundingClientRect();
-            if(!rect.width||!rect.height)return;
-            const dx=(e.clientX-lastX)/rect.width*100;
-            const dy=(e.clientY-lastY)/rect.height*100;
-            if(Math.abs(dx)+Math.abs(dy)>0){
-                pc.mapa.x=Math.max(7,Math.min(93,(Number(pc.mapa.x)||7)+dx));
-                pc.mapa.y=Math.max(8,Math.min(92,(Number(pc.mapa.y)||8)+dy));
-                moved=true;draw();
-            }
-            lastX=e.clientX;lastY=e.clientY;
-        });
-        el.addEventListener("pointerup",e=>{try{el.releasePointerCapture(e.pointerId);}catch(_){}finalizar();});
-        el.addEventListener("pointercancel",finalizar);
-        el.addEventListener("lostpointercapture",finalizar);
-        wrap.appendChild(el);
-    });
-}
-
-function agregarPCDesdeMapaNexa(){
-    if(!exigirAdministradorNexa())return;
-    const salonId=document.getElementById("mapSalonSelect")?.value;
-    if(!salonId){alert("Seleccioná un salón.");return;}
-    const nombre=prompt("Nombre de la PC:","PC-"+(pcs.length+1));
-    if(!nombre||!nombre.trim())return;
-    const pc={
-        id:Date.now(),
-        nombre:nombre.trim(),
-        salon:String(salonId),
-        estado:"Funcionando",
-        qrToken:generarToken("PC"),
-        fechaRegistro:new Date().toLocaleDateString(),
-        mapa:{x:50,y:50,z:0}
-    };
-    pcs.push(pc);
-    guardar();
-    actualizar();
-    setTimeout(()=>{
-        const sel=document.getElementById("mapSalonSelect");
-        if(sel)sel.value=String(salonId);
-        renderMapa2DNexa();
-    },50);
-}
-
-function centrarMapaNexa(){
-    if(!exigirAdministradorNexa())return;
-    const sel=document.getElementById("mapSalonSelect");
-    const salonId=sel?.value;
-    const lista=pcs.filter(p=>String(p.salon)===String(salonId));
-    lista.forEach((pc,i)=>{
-        pc.mapa={x:18+(i%5)*17,y:20+Math.floor(i/5)*23,z:0};
-    });
-    guardar();
-    renderMapa2DNexa();
-}
-
 /* =====================================================
    C.I. URUGUAYA
 ===================================================== */
@@ -4068,7 +3937,6 @@ function agregarPC(event) {
             new Date()
             .toLocaleDateString(),
 
-        mapa: { x: 15 + ((pcs.length * 17) % 70), y: 18 + ((pcs.length * 11) % 65), z: 0 }
 
     });
 
@@ -4304,7 +4172,7 @@ function imprimirQRPC() {
                 }
 
             
-/* ===== NexaTech: check-in/out + mapa 3D + seguridad ===== */
+/* ===== NexaTech: check-in/out + seguridad ===== */
 .nexa-checkin-wrap{display:grid;grid-template-columns:1fr 1.5fr;gap:18px}
 .nexa-check-card{background:var(--bg-soft);border:1px solid var(--border);border-radius:14px;padding:20px}
 .nexa-check-status{font-size:15px;margin:10px 0 16px;color:var(--text-muted)}
@@ -4316,20 +4184,7 @@ function imprimirQRPC() {
 .nexa-table th{background:#17171b;color:#fff}
 .nexa-table tr:last-child td{border-bottom:0}
 .nexa-2fa-note{margin-top:12px;padding:10px 12px;border:1px solid rgba(139,0,0,.55);background:rgba(139,0,0,.12);border-radius:9px;color:var(--text-muted);font-size:12px;line-height:1.5}
-.nexa-map-wrap{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:16px;background:#5a351d;min-height:540px;touch-action:none}
-.nexa-map-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.nexa-map-stage{position:absolute;inset:0;pointer-events:none}
-.nexa-map-floor{position:absolute;left:4%;top:5%;width:92%;height:90%;border:4px solid #3b2112;border-radius:8px;background-color:#9a6338;background-image:repeating-linear-gradient(90deg,rgba(62,31,13,.30) 0 2px,transparent 2px 92px),repeating-linear-gradient(0deg,rgba(255,218,166,.10) 0 2px,transparent 2px 46px),linear-gradient(90deg,rgba(255,255,255,.05),rgba(0,0,0,.08));box-shadow:inset 0 0 35px rgba(45,20,8,.35),0 18px 35px rgba(0,0,0,.35)}
-.nexa-map-wall{position:absolute;background:#4a2b19;border:2px solid #2b180d;box-shadow:0 6px 12px rgba(0,0,0,.35);z-index:2}
-.nexa-map-wall.w1{left:4%;top:5%;width:92%;height:18px}
-.nexa-map-wall.w2{left:4%;top:5%;width:18px;height:90%}
-#mapaPCs{position:absolute;inset:0;z-index:5}
-.nexa-map-pc{position:absolute;pointer-events:auto;width:86px;height:64px;border:2px solid #292929;border-radius:10px;background:linear-gradient(145deg,#363636,#111);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:11px;cursor:grab;user-select:none;touch-action:none;box-shadow:0 8px 15px rgba(0,0,0,.38);will-change:left,top}
-.nexa-map-pc.dragging{cursor:grabbing;z-index:20;box-shadow:0 14px 25px rgba(0,0,0,.55)}
-.nexa-map-pc .pc-led{width:7px;height:7px;border-radius:50%;background:#35b54a;box-shadow:0 0 8px rgba(53,181,74,.8);margin-bottom:5px}
-.nexa-map-pc.repair .pc-led{background:#e2a400}.nexa-map-pc.off .pc-led{background:#e23b3b}.nexa-map-pc.net .pc-led{background:#2685e8}
-.nexa-map-help{color:var(--text-muted);font-size:12px;margin-top:9px}
-@media(max-width:850px){.nexa-checkin-wrap{grid-template-columns:1fr}.nexa-map-wrap{min-height:430px}.nexa-map-pc{width:70px;height:54px;font-size:10px}}
+@media(max-width:850px){.nexa-checkin-wrap{grid-template-columns:1fr}}
 </style>
 
         </head>
@@ -5380,8 +5235,6 @@ function actualizar() {
 
     mostrarPCs();
     actualizarCheckinNexa();
-    prepararSelectMapaNexa();
-    renderMapa2DNexa();
 
     mostrarSwitches();
 
